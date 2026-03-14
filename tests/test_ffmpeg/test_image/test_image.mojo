@@ -1,7 +1,7 @@
 from std.testing import TestSuite, assert_equal
 from std.sys import size_of
 from std.ffi import c_uchar
-from momanim.primitives.image import Image
+from momanim.image.image import Image
 from std.os import getenv
 from std.os.path import join
 
