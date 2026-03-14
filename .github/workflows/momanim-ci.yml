@@ -1,0 +1,158 @@
+name: Build and Test momanim
+on:
+  schedule:
+    - cron: '1 6 * * 5'
+  workflow_dispatch: #allows you to trigger manually
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should-build: ${{ steps.changes.outputs.should-build }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 5
+
+    - name: Check for relevant changes
+      id: changes
+      run: |
+        if [[ "${{ github.event_name }}" == "schedule" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "should-build=true" >> $GITHUB_OUTPUT
+          echo "Scheduled or manual run - building images"
+        elif git diff --name-only ${{ github.event.before }}..${{ github.sha }} | grep -E "(momanim\.Dockerfile|pixi\.(toml|lock)|docker-compose\.yml)" > /dev/null; then
+          echo "should-build=true" >> $GITHUB_OUTPUT
+          echo "Docker/pixi files changed - building images"
+        else
+          echo "should-build=false" >> $GITHUB_OUTPUT
+          echo "No relevant changes - skipping image build"
+        fi
+
+  build:
+    needs: check-changes
+    if: needs.check-changes.outputs.should-build == 'true'
+    runs-on: ${{ matrix.runner.RUNNER_NAME }}
+    strategy:
+      max-parallel: 4
+      matrix:
+        runner:
+          - RUNNER_NAME: ubuntu-24.04-arm
+            PLATFORM: arm64
+            DEVICE: cpu
+          - RUNNER_NAME: ubuntu-latest
+            PLATFORM: x86_64
+            DEVICE: cpu
+          - RUNNER_NAME: ubuntu-24.04-arm
+            PLATFORM: arm64
+            DEVICE: gpu
+          - RUNNER_NAME: ubuntu-latest
+            PLATFORM: x86_64
+            DEVICE: gpu
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build, tag, and push image
+      run: |
+        export DOCKER_BUILDKIT=1
+        export COMPOSE_PROFILES=build_${DEVICE}_${PLATFORM}
+        echo ${PASSWORD} | docker login -u $USERNAME --password-stdin
+
+        if docker compose pull; then
+            echo "Docker Compose pull succeeded."
+        else
+            echo "Docker Compose pull failed."
+        fi
+        
+        export VERSION=latest
+        docker compose build
+        docker compose push
+        export VERSION=$(date +%F)
+        docker compose build
+        docker compose push
+      env:
+        USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        PLATFORM: ${{ matrix.runner.PLATFORM }}
+        DEVICE: ${{ matrix.runner.DEVICE }}
+
+  test:
+    needs: [check-changes, build]
+    if: always() && (needs.build.result == 'success' || needs.check-changes.outputs.should-build == 'false')
+    runs-on: ${{ matrix.runner.RUNNER_NAME }}
+    strategy:
+      max-parallel: 2
+      matrix:
+        runner:
+          - RUNNER_NAME: ubuntu-24.04-arm
+            PLATFORM: arm64
+          - RUNNER_NAME: ubuntu-latest
+            PLATFORM: x86_64
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # - name: Cache Modular repository
+    #   uses: actions/cache@v4
+    #   with:
+    #     path: third_party/modular
+    #     key: modular-repo-${{ matrix.runner.PLATFORM }}-${{ hashFiles('pixi.toml', 'pixi.lock') }}-${{ github.sha }}
+    #     restore-keys: |
+    #       modular-repo-${{ matrix.runner.PLATFORM }}-${{ hashFiles('pixi.toml', 'pixi.lock') }}-
+    #       modular-repo-${{ matrix.runner.PLATFORM }}-
+
+    - name: Cache ffmpeg repository
+      uses: actions/cache@v4
+      with:
+        path: third_party/ffmpeg/build
+        key: ffmpeg-repo-${{ matrix.runner.PLATFORM }}-${{ github.sha }}
+        restore-keys: |
+          ffmpeg-repo-${{ matrix.runner.PLATFORM }}-
+
+    - name: Fix workspace permissions
+      run: |
+        sudo chown -R 1000:1000 .
+
+    - name: Pull docker image and run tests
+      run: |
+        echo ${PASSWORD} | docker login -u $USERNAME --password-stdin
+
+        if docker compose pull; then
+            echo "Docker Compose pull succeeded."
+        else
+            echo "Docker Compose pull failed."
+        fi
+      env:
+        DOCKER_BUILDKIT: 1
+        USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        # Github doesn't have any gpu runners.
+        COMPOSE_PROFILES: cpu_${{ matrix.runner.PLATFORM }} 
+    - name: Run Configuration
+      run: |
+        docker compose run --rm momanim_${COMPOSE_PROFILES} bash -l -c "pixi run configure"
+      env:
+        # Github doesn't have any gpu runners.
+        COMPOSE_PROFILES: cpu_${{ matrix.runner.PLATFORM }} 
+        CONFIGURE_LIBOPENH264: true
+
+    - name: Run Tests
+      run: |
+        docker compose run --rm momanim_${COMPOSE_PROFILES} bash -l -c "pixi run configure && pixi run test_all"
+      env:
+        # Github doesn't have any gpu runners.
+        COMPOSE_PROFILES: cpu_${{ matrix.runner.PLATFORM }} 
+        # Toggle if there is a need to build the stdlib
+        CONFIGURE_LIBOPENH264: true
+        # export PIXI_ENVIRONMENT_NAME: stdlib-dev
