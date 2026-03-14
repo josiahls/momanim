@@ -18,7 +18,7 @@ preview = ["pixi-build"]
 [activation.env]
 LIBRARY_PATH = "$CONDA_PREFIX/lib:$LIBRARY_PATH"
 LD_LIBRARY_PATH = "$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
-MAV_INCLUDES = " -I . -I third_party/NuMojo"
+MAV_INCLUDES = " -I . -I third_party/NuMojo -I third_party/mav"
 MAV_LINKERS = " -Xlinker -lavutil -Xlinker -lavcodec -Xlinker -lswresample -Xlinker -lswscale -Xlinker -lavformat"
 MOJO_COMPILE_FLAGS = "$MAV_LINKERS $MAV_INCLUDES"
 MOJO_DEBUG_COMPILE_FLAGS = "$MOJO_COMPILE_FLAGS --debug-level=line-tables"
@@ -33,16 +33,29 @@ version = "0.0.1"
 backend = { name = "pixi-build-mojo", version = "0.1.*" }
 
 [package.host-dependencies]
-mav = ">=0.0.1"
+# Static version pin for now since Mojo nightly has high churn.
+mojo-compiler = "==0.26.2.0.dev2026031005,<0.27"
+# ffmpeg has zlib version restrictions, thus can conflict with git.
+git = ">=2.53.0"
+openssh = ">=9.0"
 
 [package.build-dependencies]
-mav = ">=0.0.1"
+# Static version pin for now since Mojo nightly has high churn.
+mojo-compiler = "==0.26.2.0.dev2026031005,<0.27"
+
 
 [package.run-dependencies]
-mav = ">=0.0.1"
+# Static version pin for now since Mojo nightly has high churn.
+mojo-compiler = "==0.26.2.0.dev2026031005,<0.27"
 
 [dependencies]
-mav = ">=0.0.1"
+# Static version pin for now since Mojo nightly has high churn.
+mojo = "==0.26.2.0.dev2026031005,<0.27"
+pre-commit = ">=4.5.0,<5"
+# Pin to LGPL build (no libx264/libx265) to avoid GPL copyleft
+ffmpeg = { version = "==8.0.1", build = "*lgpl*" }
+git = ">=2.53.0"
+openssh = ">=9.0"
 
 [feature.openh264.dependencies]
 openh264 = "==2.6.0"
@@ -55,13 +68,15 @@ use-openh264 = ["openh264"]
 extra-args = [ "$MAV_LINKERS", "$MAV_INCLUDES" ]
 
 [tasks]
-########################## Pre-commit Configuration ############################
 install_pre_commit_hooks = { cmd = [
     "pre-commit", "install"
 ], outputs = [".git/hooks/pre-commit"]}
 
-############################ Git Ops ###########################################
 push = "git push --force-with-lease"
+
+clone_lightbug_http = "bash tools/clone_lightbug_http.sh"
+clone_numojo = "bash tools/clone_numojo.sh"
+clone_mav = "bash tools/clone_mav.sh"
 
 [tasks.rebase]
 cmd = "git rebase -i HEAD~{{ n_commits }}"
@@ -78,7 +93,7 @@ cmd = "bash tools/generate_test_videos.sh"
 
 ############################### Core API #######################################
 [tasks.configure]
-depends-on = [ "install_pre_commit_hooks", "generate_test_videos" ]
+depends-on = [ "install_pre_commit_hooks", "generate_test_videos", "clone_lightbug_http", "clone_numojo", "clone_mav" ]
 
 [tasks.package]
 cmd = "mojo package $MAV_INCLUDES momanim"

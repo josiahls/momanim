@@ -1,0 +1,17 @@
+[submodule "lightbug_http"]
+    path = third_party/lightbug_http
+    url = https://github.com/josiahls/lightbug_http.git
+    branch = nightly
+    ignore = all
+
+[submodule "NuMojo"]
+    path = third_party/NuMojo
+    url = https://github.com/josiahls/NuMojo.git
+    branch = pre-0.9
+    ignore = all
+
+[submodule "mav"]
+    path = third_party/mav
+    url = https://github.com/josiahls/mav.git
+    branch = main
+    ignore = all
