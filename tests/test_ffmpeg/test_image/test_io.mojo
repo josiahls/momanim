@@ -7,7 +7,9 @@ from mav.ffmpeg.avutil.pixfmt import AVPixelFormat
 
 def test_image_read() raises:
     var test_data_root = getenv("PIXI_PROJECT_ROOT")
-    var root_path = join(test_data_root, "test_data/testsrc_128x128.png")
+    var root_path = join(
+        test_data_root, "test_data/generate_test_videos_testsrc_128x128.png"
+    )
     var image = image_read(root_path)
     assert_equal(image.width, 128)
     assert_equal(image.height, 128)
@@ -22,7 +24,9 @@ def test_image_read() raises:
 
 def test_image_save() raises:
     var test_data_root = getenv("PIXI_PROJECT_ROOT")
-    var root_path = join(test_data_root, "test_data/testsrc_128x128.png")
+    var root_path = join(
+        test_data_root, "test_data/generate_test_videos_testsrc_128x128.png"
+    )
     var save_path = join(test_data_root, "test_data/test_image_save.png")
     var image = image_read(root_path)
     image_save(image, save_path)
