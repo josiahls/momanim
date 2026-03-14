@@ -34,7 +34,9 @@ __extension Image:
 
 def test_image_arr() raises:
     var test_data_root = getenv("PIXI_PROJECT_ROOT")
-    var root_path = join(test_data_root, "test_data/testsrc_128x128.png")
+    var root_path = join(
+        test_data_root, "test_data/generate_test_videos_testsrc_128x128.png"
+    )
     var image = Image.load(root_path)
 
     # NOTE this is probably unsafe since image is being dealloced
@@ -59,7 +61,9 @@ def test_image_arr() raises:
 
 def test_image_load() raises:
     var test_data_root = getenv("PIXI_PROJECT_ROOT")
-    var root_path = join(test_data_root, "test_data/testsrc_128x128.png")
+    var root_path = join(
+        test_data_root, "test_data/generate_test_videos_testsrc_128x128.png"
+    )
     var image = Image.load(root_path)
 
     print("Done Loading image")
@@ -88,7 +92,9 @@ def test_image_load() raises:
 
 def test_image_save() raises:
     var test_data_root = getenv("PIXI_PROJECT_ROOT")
-    var root_path = join(test_data_root, "test_data/testsrc_128x128.png")
+    var root_path = join(
+        test_data_root, "test_data/generate_test_videos_testsrc_128x128.png"
+    )
     var save_path = join(test_data_root, "test_data/test_image_image_save.png")
     # TODO: Next pr MUST fix the lifetimes to make this work.
     var image = Image.load(root_path)
