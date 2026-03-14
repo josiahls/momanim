@@ -1,0 +1,23 @@
+.env
+# pixi environments
+.pixi
+*.egg-info
+# vscode / cursor
+.vscode/settings.json
+
+# Build Artifacts
+*.mojopkg
+
+# Submodules
+third_party/modular
+third_party/modular/bazel-modular
+
+# Stdlib build artifacts
+kgen.trace*
+
+# Build artifacts
+third_party/ffmpeg/build
+build
+
+# Test Data
+test_data/

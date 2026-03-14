@@ -1,0 +1,130 @@
+[workspace]
+authors = ["Josiah Laivins <jklaivins@gmail.com>"]
+channels = [
+    "https://conda.modular.com/max-nightly", 
+    "https://repo.prefix.dev/modular-community", 
+    "conda-forge",
+    "josiahls
+]
+name = "momanim"
+platforms = ["linux-64", "linux-aarch64"]
+version = "0.0.1"
+license = "Apache-2.0"
+license-file = "LICENSE"
+homepage = "https://github.com/josiahls/momanim"
+repository = "https://github.com/josiahls/momanim"
+preview = ["pixi-build"]
+
+[activation.env]
+LIBRARY_PATH = "$CONDA_PREFIX/lib:$LIBRARY_PATH"
+LD_LIBRARY_PATH = "$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
+MAV_INCLUDES = " -I . -I third_party/NuMojo"
+MAV_LINKERS = " -Xlinker -lavutil -Xlinker -lavcodec -Xlinker -lswresample -Xlinker -lswscale -Xlinker -lavformat"
+MOJO_COMPILE_FLAGS = "$MAV_LINKERS $MAV_INCLUDES"
+MOJO_DEBUG_COMPILE_FLAGS = "$MOJO_COMPILE_FLAGS --debug-level=line-tables"
+MOJO_ENABLE_STACK_TRACE_ON_ERROR="1"
+LOGGING_LEVEL="DEBUG"
+
+[package]
+name = "momanim"
+version = "0.0.1"
+
+[package.build]
+backend = { name = "pixi-build-mojo", version = "0.1.*" }
+
+[package.host-dependencies]
+mav = ">=0.0.1"
+
+[package.build-dependencies]
+mav = ">=0.0.1"
+
+[package.run-dependencies]
+mav = ">=0.0.1"
+
+[dependencies]
+mav = ">=0.0.1"
+
+[feature.openh264.dependencies]
+openh264 = "==2.6.0"
+
+[environments]
+default = []
+use-openh264 = ["openh264"]
+
+[package.build.config]
+extra-args = [ "$MAV_LINKERS", "$MAV_INCLUDES" ]
+
+[tasks]
+########################## Pre-commit Configuration ############################
+install_pre_commit_hooks = { cmd = [
+    "pre-commit", "install"
+], outputs = [".git/hooks/pre-commit"]}
+
+############################ Git Ops ###########################################
+push = "git push --force-with-lease"
+
+[tasks.rebase]
+cmd = "git rebase -i HEAD~{{ n_commits }}"
+args = [{ arg = "n_commits", default = "1" }]
+
+############################### Env setup ######################################
+
+[tasks.configure_lldb]
+cmd = "bash tools/configure_lldb.sh"
+
+######################## Test Data Generation API ##############################
+[tasks.generate_test_videos]
+cmd = "bash tools/generate_test_videos.sh"
+
+############################### Core API #######################################
+[tasks.configure]
+depends-on = [ "install_pre_commit_hooks", "generate_test_videos" ]
+
+[tasks.package]
+cmd = "mojo package $MAV_INCLUDES momanim"
+depends-on = [ "configure" ]
+
+[tasks.build]
+cmd = "mojo build $MOJO_COMPILE_FLAGS {{ file }} -o $(tools/mojo_build_ex.sh {{ file }})"
+args = ["file"]
+
+[tasks.build_debug]
+cmd = "mojo build $MOJO_DEBUG_COMPILE_FLAGS {{ file }} -o $(tools/mojo_build_ex.sh {{ file }})"
+args = ["file"]
+
+[tasks.build_valgrind]
+cmd = "mojo build $MOJO_DEBUG_COMPILE_FLAGS --march=x86-64-v2 {{ file }} -o $(tools/mojo_build_ex.sh {{ file }})"
+args = ["file"]
+
+[tasks.build_sanitize]
+cmd = "mojo build $MOJO_DEBUG_COMPILE_FLAGS --sanitize=address {{ file }} -o $(tools/mojo_build_ex.sh {{ file }})"
+args = ["file"]
+
+[tasks.format]
+cmd = "mojo format momanim"
+
+[tasks.valgrind]
+cmd = "valgrind --leak-check=full --track-origins=yes -s $(tools/mojo_build_ex.sh {{ file }})"
+args = ["file"]
+depends-on = [ { task = "build_valgrind", args = ["{{ file }}"] } ]
+
+[tasks.debug]
+cmd = "mojo debug ./$(tools/mojo_build_ex.sh {{ file }})"
+args = ["file"]
+depends-on = [ "configure_lldb" ]
+
+[tasks.test_no_config]
+cmd = "./$(tools/mojo_build_ex.sh {{ file }})"
+args = ["file"]
+depends-on = [ { task = "build_debug", args = ["{{ file }}"] } ]
+
+[tasks.test]
+args = ["file"]
+depends-on = [ 
+    "configure",  
+    { task = "test_no_config", args = ["{{ file }}"] }
+]
+
+[feature.openh264.tasks.test_all]
+cmd = "mojo run run_tests.mojo"
+depends-on = [ "configure" ]

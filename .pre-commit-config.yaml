@@ -1,0 +1,11 @@
+repos:
+  - repo: local
+    hooks:
+      - id: mojo-format
+        name: mojo-format
+        entry: pixi run format
+        language: system
+        files: '^(?!.*tests/test_c_project/build/).*\.(mojo|🔥)$'
+
+        stages: [commit]
+

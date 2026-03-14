@@ -1,0 +1,7 @@
+# Convert to .env
+# or build_cpu_arm64, build_gpu_arm64, build_cpu_x86_64, build_gpu_x86_64, 
+# gpu_arm64, cpu_arm64, cpu_x86_64, gpu_x86_64
+COMPOSE_PROFILES=cpu_arm64
+# Can be changed to "stdlib-dev" to building and using the cloned mojo stdlib.
+PIXI_ENVIRONMENT_NAME="default"
+CONFIGURE_LIBOPENH264="true"
