@@ -31,8 +31,8 @@ services:
       context: .
       args:
       - BASE_IMAGE=ubuntu:22.04
-      cache_from:
-      - josiahls/momanim-x86_64-cpu:${VERSION:-latest}
+      # cache_from:
+      # - josiahls/momanim-x86_64-cpu:${VERSION:-latest}
     image: josiahls/momanim-x86_64-cpu:${VERSION:-latest}
     profiles: ["build_cpu_x86_64"]
     platform: linux/amd64
@@ -43,8 +43,8 @@ services:
       context: .
       args:
       - BASE_IMAGE=arm64v8/ubuntu:22.04
-      cache_from:
-      - josiahls/momanim-arm64-cpu:${VERSION:-latest}
+      # cache_from:
+      # - josiahls/momanim-arm64-cpu:${VERSION:-latest}
     image: josiahls/momanim-arm64-cpu:${VERSION:-latest}
     profiles: ["build_cpu_arm64"]
     platform: linux/arm64
@@ -55,8 +55,8 @@ services:
       context: .
       args:
       - BASE_IMAGE=nvidia/cuda:12.0.0-devel-ubuntu22.04
-      cache_from:
-      - josiahls/momanim-x86_64-gpu:${VERSION:-latest}
+      # cache_from:
+      # - josiahls/momanim-x86_64-gpu:${VERSION:-latest}
     image: josiahls/momanim-x86_64-gpu:${VERSION:-latest}
     profiles: ["build_gpu_x86_64"]
     platform: linux/amd64
@@ -68,8 +68,8 @@ services:
       context: .
       args:
       - BASE_IMAGE=nvidia/cuda:12.0.0-devel-ubuntu22.04
-      cache_from:
-      - josiahls/momanim-arm64-gpu:${VERSION:-latest}
+      # cache_from:
+      # - josiahls/momanim-arm64-gpu:${VERSION:-latest}
     image: josiahls/momanim-arm64-gpu:${VERSION:-latest}
     profiles: ["build_gpu_arm64"]
     platform: linux/arm64
