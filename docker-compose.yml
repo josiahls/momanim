@@ -10,19 +10,13 @@ x-momanim_base: &momanim_base
   tty: true
   shm_size: 16000000000
   ports:
-    - "5910:5910"
+    - "5911:5911"
   volumes:
     - .:/home/mojo_user/momanim/
     - ~/.ssh:/home/mojo_user/.ssh:rw
-    - momanim_vscode_data_cache:/home/mojo_user/.vscode-server/data/User/globalStorage:rw
-    - /tmp/.X11-unix:/tmp/.X11-unix:rw
   environment:
     PIXI_ENVIRONMENT_NAME: ${PIXI_ENVIRONMENT_NAME:-default}
     CONFIGURE_LIBOPENH264: ${CONFIGURE_LIBOPENH264:-false}
-
-volumes:
-  momanim_vscode_data_cache:
-      external: false
 
 services:
   momanim_build_x86_64:
