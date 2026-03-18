@@ -26,6 +26,16 @@ if [ ! -f ${OUTPUT_FILE_2} ]; then
         ${OUTPUT_FILE_2}
 fi
 
+# 127x127: width*3=381 (not 16/32-byte aligned)
+OUTPUT_FILE_2B="${TEST_DATA_ROOT}/generate_test_videos_testsrc_127x127.png"
+if [ ! -f ${OUTPUT_FILE_2B} ]; then
+    echo "Generating ${OUTPUT_FILE_2B}"
+    ffmpeg -y \
+        -f lavfi -i "testsrc=duration=1:size=127x127:rate=1" \
+        -vframes 1 \
+        ${OUTPUT_FILE_2B}
+fi
+
 OUTPUT_FILE_3="${TEST_DATA_ROOT}/generate_test_videos_testsrc_320x180_30fps_2s.mp4"
 if [ ! -f ${OUTPUT_FILE_3} ]; then
     echo "Generating ${OUTPUT_FILE_3}"
