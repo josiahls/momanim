@@ -11,6 +11,8 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
     "Number of channels (or planes in ffmpeg parlance)."
     var color_space: ColorSpace
     "Defines how the underlying pointer data is to be interpreted."
+    var io_backend_opaque_params: Dict[String, OpaquePointer[MutExternalOrigin]]
+    """Private params used by the io backend to read or write this Image."""
 
     fn __init__(out self, var elems: List[Scalar[Self.dtype]]) raises:
         self.w = UInt(len(elems))
@@ -28,6 +30,7 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
             copy=False,
         )
         self.color_space = ColorSpace.RGB_24
+        self.io_backend_opaque_params = {}
 
     fn __init__(
         out self,
@@ -49,3 +52,4 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
             copy=False,
         )
         self.color_space = ColorSpace.RGB_24
+        self.io_backend_opaque_params = {}

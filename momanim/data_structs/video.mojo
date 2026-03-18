@@ -19,13 +19,15 @@ struct VideoFrame[dtype: DType = DType.uint8](Copyable, Movable, Writable):
 
 
 struct Video[dtype: DType = DType.uint8](Movable, Writable):
-    var frames: List[VideoFrame[Self.dtype]]
+    var _frames: List[VideoFrame[Self.dtype]]
     var w: UInt
     var h: UInt
     var ch: UInt
     "Number of channels (or planes in ffmpeg parlance)."
     var color_space: ColorSpace
     "Defines how the underlying pointer data is to be interpreted."
+    var io_backend_opaque_params: Dict[String, OpaquePointer[MutExternalOrigin]]
+    """Private params used by the io backend to read or write this Video."""
 
     fn __init__(out self, var elems: List[Scalar[Self.dtype]]) raises:
         self.w = UInt(len(elems))
@@ -37,13 +39,14 @@ struct Video[dtype: DType = DType.uint8](Movable, Writable):
             )
         self.h = 1
         self.ch = 1
-        self.frames = List[VideoFrame[Self.dtype]]()
+        self._frames = List[VideoFrame[Self.dtype]]()
         var frame = VideoFrame(
             elems.unsafe_ptr().unsafe_origin_cast[MutExternalOrigin](),
             len(elems),
         )
-        self.frames.append(frame^)
+        self._frames.append(frame^)
         self.color_space = ColorSpace.RGB_24
+        self.io_backend_opaque_params = {}
 
     fn __init__(
         out self,
@@ -59,7 +62,8 @@ struct Video[dtype: DType = DType.uint8](Movable, Writable):
             )
         self.h = 1
         self.ch = 1
-        self.frames = List[VideoFrame[Self.dtype]]()
+        self._frames = List[VideoFrame[Self.dtype]]()
         var frame = VideoFrame(ptr, size)
-        self.frames.append(frame^)
+        self._frames.append(frame^)
         self.color_space = ColorSpace.RGB_24
+        self.io_backend_opaque_params = {}
