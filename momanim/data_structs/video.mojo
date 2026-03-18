@@ -3,8 +3,23 @@ from std.ffi import c_uchar
 from momanim.constants import ColorSpace
 
 
-struct Image[dtype: DType = DType.uint8](Movable, Writable):
+struct VideoFrame[dtype: DType = DType.uint8](Copyable, Movable, Writable):
     var _data: DataContainer[Self.dtype]
+
+    fn __init__(
+        out self,
+        var ptr: UnsafePointer[Scalar[Self.dtype], MutExternalOrigin],
+        size: Int,
+    ) raises:
+        self._data = DataContainer(
+            ptr=ptr.unsafe_origin_cast[MutExternalOrigin](),
+            size=size,
+            copy=False,
+        )
+
+
+struct Video[dtype: DType = DType.uint8](Movable, Writable):
+    var frames: List[VideoFrame[Self.dtype]]
     var w: UInt
     var h: UInt
     var ch: UInt
@@ -22,11 +37,12 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
             )
         self.h = 1
         self.ch = 1
-        self._data = DataContainer(
-            ptr=elems.unsafe_ptr().unsafe_origin_cast[MutExternalOrigin](),
-            size=len(elems),
-            copy=False,
+        self.frames = List[VideoFrame[Self.dtype]]()
+        var frame = VideoFrame(
+            elems.unsafe_ptr().unsafe_origin_cast[MutExternalOrigin](),
+            len(elems),
         )
+        self.frames.append(frame^)
         self.color_space = ColorSpace.RGB_24
 
     fn __init__(
@@ -43,9 +59,7 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
             )
         self.h = 1
         self.ch = 1
-        self._data = DataContainer(
-            ptr=ptr.unsafe_origin_cast[MutExternalOrigin](),
-            size=size,
-            copy=False,
-        )
+        self.frames = List[VideoFrame[Self.dtype]]()
+        var frame = VideoFrame(ptr, size)
+        self.frames.append(frame^)
         self.color_space = ColorSpace.RGB_24
