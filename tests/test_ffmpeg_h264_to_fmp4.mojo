@@ -346,42 +346,42 @@ def get_video_frame(
             if not ost.sws_ctx:
                 std.os.abort("Failed to initialize conversion context")
 
-            # API wise, this seems problematic no? These are all long longs
-            # and we are converting to ints.
-            fill_yuv_image(
-                ost.tmp_frame,
-                c_int(ost.next_pts),
-                c_int(c[].width),
-                c_int(c[].height),
-            )
+        # API wise, this seems problematic no? These are all long longs
+        # and we are converting to ints.
+        fill_yuv_image(
+            ost.tmp_frame,
+            c_int(ost.next_pts),
+            c_int(c[].width),
+            c_int(c[].height),
+        )
 
-            # TODO: There has to be a better way to do this.
-            # We should at least not be doing the allocations in a hot loop.
-            var src_slice = alloc[UnsafePointer[c_uchar, ImmutExternalOrigin]](
-                len(ost.tmp_frame[].data)
-            )
-            for i in range(len(ost.tmp_frame[].data)):
-                src_slice[i] = ost.tmp_frame[].data[i].as_immutable()
+        # TODO: There has to be a better way to do this.
+        # We should at least not be doing the allocations in a hot loop.
+        var src_slice = alloc[UnsafePointer[c_uchar, ImmutExternalOrigin]](
+            len(ost.tmp_frame[].data)
+        )
+        for i in range(len(ost.tmp_frame[].data)):
+            src_slice[i] = ost.tmp_frame[].data[i].as_immutable()
 
-            var dst = alloc[UnsafePointer[c_uchar, MutExternalOrigin]](
-                len(ost.frame[].data)
-            )
-            for i in range(len(ost.frame[].data)):
-                dst[i] = ost.frame[].data[i]
+        var dst = alloc[UnsafePointer[c_uchar, MutExternalOrigin]](
+            len(ost.frame[].data)
+        )
+        for i in range(len(ost.frame[].data)):
+            dst[i] = ost.frame[].data[i]
 
-            # NOTE: https://github.com/modular/modular/pull/5715
-            # adds unsafe_ptr to StaticTuple, which is needed for this.
-            var res = swscale.sws_scale(
-                ost.sws_ctx,
-                src_slice,
-                ost.tmp_frame[].linesize.unsafe_ptr(),
-                0,
-                c[].height,
-                dst,
-                ost.frame[].linesize.unsafe_ptr(),
-            )
-            if res < 0:
-                std.os.abort("Failed to scale image")
+        # NOTE: https://github.com/modular/modular/pull/5715
+        # adds unsafe_ptr to StaticTuple, which is needed for this.
+        var res = swscale.sws_scale(
+            ost.sws_ctx,
+            src_slice,
+            ost.tmp_frame[].linesize.unsafe_ptr(),
+            0,
+            c[].height,
+            dst,
+            ost.frame[].linesize.unsafe_ptr(),
+        )
+        if res < 0:
+            std.os.abort("Failed to scale image")
     else:
         fill_yuv_image(
             ost.frame, c_int(ost.next_pts), c_int(c[].width), c_int(c[].height)

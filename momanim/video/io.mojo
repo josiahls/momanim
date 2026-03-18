@@ -64,7 +64,7 @@ from mav.ffmpeg import swscale
 from mav.ffmpeg import swrsample
 from mav.ffmpeg.swrsample import SwrContext
 from std.utils import StaticTuple
-
+from momanim.image.utils import convert_format
 from std.logger.logger import Logger, Level, DEFAULT_LEVEL
 
 
@@ -78,8 +78,233 @@ comptime SCALE_FLAGS = SwsFlags.SWS_BICUBIC
 comptime _logger = Logger[level=Level.DEBUG]()
 
 
-@fieldwise_init
-struct OutputStream(Movable):
+def alloc_frame(
+    pix_fmt: AVPixelFormat.ENUM_DTYPE,
+    width: c_int,
+    height: c_int,
+    colorspace: c_int,
+) raises -> UnsafePointer[AVFrame, MutExternalOrigin]:
+    # var frame = alloc[AVFrame](1)
+
+    var frame = avutil.av_frame_alloc()
+
+    frame[].format = pix_fmt
+    frame[].width = width
+    frame[].height = height
+    frame[].colorspace = colorspace
+
+    ret = avutil.av_frame_get_buffer(frame, 0)
+    if ret < 0:
+        std.os.abort("Failed to allocate frame buffer")
+
+    return frame
+
+
+def open_video(
+    oc: UnsafePointer[AVFormatContext, MutExternalOrigin],
+    video_codec: UnsafePointer[AVCodec, ImmutExternalOrigin],
+    mut ost: OutputStream,
+    opt_arg: UnsafePointer[AVDictionary, ImmutExternalOrigin],
+) raises:
+    var ret: c_int = 0
+    var c = ost.enc
+    # NOTE: We need to add an override to avcodec_open2 that makes
+    # an internal null pointer. Debug mode otherwise fails on this.
+    var opt = UnsafePointer[AVDictionary, MutExternalOrigin]()
+    var opt_ptr = alloc[UnsafePointer[AVDictionary, MutExternalOrigin]](1)
+    opt_ptr[] = opt
+    print("im opening a video")
+
+    _ = avcodec.avcodec_open2(c, video_codec, opt_ptr)
+    # av_dict_free(&opt);
+
+    ost.frame = alloc_frame(c[].pix_fmt, c[].width, c[].height, c[].color_range)
+    if not ost.frame:
+        std.os.abort("Failed to allocate video frame")
+
+    ost.tmp_frame = alloc_frame(
+        c[].pix_fmt,
+        c[].width,
+        c[].height,
+        c[].color_range,
+    )
+
+    ret = avcodec.avcodec_parameters_from_context(ost.st[].codecpar, c)
+    if ret < 0:
+        std.os.abort("Failed to copy the stream parameters")
+
+    _ = c
+
+
+def log_packet(
+    fmt_ctx: UnsafePointer[AVFormatContext, MutExternalOrigin],
+    pkt: UnsafePointer[AVPacket, MutExternalOrigin],
+) raises:
+    print(
+        "pts:{} dts:{} duration:{} stream_index:{}".format(
+            pkt[].pts,
+            pkt[].dts,
+            pkt[].duration,
+            pkt[].stream_index,
+        )
+    )
+
+
+struct VideoData(Copyable, Movable):
+    var data: List[UnsafePointer[c_uchar, MutAnyOrigin]]
+    var width: c_int
+    var height: c_int
+    var linesizes: List[c_int]
+    var format: AVPixelFormat.ENUM_DTYPE
+    var n_color_spaces: c_int
+    var n_frames: c_int
+
+    fn __init__(out self):
+        self.width = 0
+        self.height = 0
+        self.linesizes = List[c_int]()
+        self.format = AVPixelFormat.AV_PIX_FMT_NONE._value
+        self.n_color_spaces = 0
+        self.data = List[UnsafePointer[c_uchar, MutAnyOrigin]]()
+        self.n_frames = 0
+
+    # fn __del__(deinit self):
+    #     for i in range(len(self.data)):
+    #         self.data[i].free()
+
+
+def decode_packet(
+    oc: UnsafePointer[AVFormatContext, MutExternalOrigin],
+    video_codec_ctx: UnsafePointer[AVCodecContext, MutExternalOrigin],
+    packet: UnsafePointer[AVPacket, MutExternalOrigin],
+    frame: UnsafePointer[AVFrame, MutExternalOrigin],
+    mut video_data: VideoData,
+) raises -> c_int:
+    var ret = avcodec.avcodec_send_packet(video_codec_ctx, packet)
+    if ret < 0:
+        raise Error("Failed to send packet: {}".format(avutil.av_err2str(ret)))
+
+    while ret >= 0:
+        ret = avcodec.avcodec_receive_frame(video_codec_ctx, frame)
+        if ret == AVERROR(ErrNo.EAGAIN.value) or ret == Int32(AVERROR_EOF):
+            break
+        elif ret < 0:
+            raise Error(
+                "Failed to receive frame: {}".format(avutil.av_err2str(ret))
+            )
+
+        var tmp_frame = avutil.av_frame_alloc()
+
+        convert_format(
+            frame=frame,
+            tmp_frame=tmp_frame,
+            sws_ctx=oc[].sws_ctx,
+            enc=oc[].enc,
+            src_format=frame[].format,
+            dst_format=video_data.format,
+        )
+
+        video_data.n_color_spaces = frame[].colorspace
+        var total_size = c_int(0)
+        for c in range(video_data.n_color_spaces):
+            total_size += frame[].linesize[c] * frame[].height
+
+        var ptr = alloc[c_uchar](Int(total_size))
+        for c in range(video_data.n_color_spaces):
+            # TODO: There's a more efficient way of doing this.
+            ptr[] = frame[].data[c][].copy()
+            ptr += frame[].linesize[c] * frame[].height
+        video_data.data.append(ptr)
+        video_data.width = frame[].width
+        video_data.height = frame[].height
+        for c in range(video_data.n_color_spaces):
+            video_data.linesizes.append(frame[].linesize[c])
+        video_data.format = frame[].format
+        video_data.n_frames += 1
+        print("writing frame number: ", video_data.n_frames)
+
+    return ret
+
+
+def video_read[
+    in_buffer_size: c_int = 4096
+](path: Path) raises -> List[VideoData]:
+    if not path.exists():
+        raise Error("File does not exist: {}".format(path))
+
+    _logger.info("Reading video from path: ", path)
+    var packet = avcodec.av_packet_alloc()
+    var frame = avutil.av_frame_alloc()
+    var oc = avformat.avformat_alloc_context()
+    var output_buffer = List[c_uchar](capacity=Int(in_buffer_size))
+    var path_copy = String(path).copy()
+    var ret = avformat.avformat_open_input(
+        s=oc, url=path_copy, fmt=None, options=None
+    )
+    var video_datas = List[VideoData](capacity=Int(oc[].nb_streams))
+    if ret < 0:
+        raise Error("Failed to open input: {}".format(ret))
+    ret = avformat.avformat_find_stream_info(ic=oc, options=None)
+    if ret < 0:
+        raise Error("Failed to find stream info: {}".format(ret))
+
+    var video_stream_mapping = List[Int](capacity=Int(oc[].nb_streams))
+    print("Number of streams: {}".format(oc[].nb_streams))
+    for i in range(oc[].nb_streams):
+        var in_stream = oc[].streams[i]
+        var codecpar = in_stream[].codecpar
+        if codecpar[].codec_type == AVMediaType.AVMEDIA_TYPE_VIDEO._value:
+            _logger.info("Found video stream: {}".format(i))
+            video_stream_mapping.append(Int(i))
+
+    for i in video_stream_mapping:
+        var video_stream = oc[].streams[i]
+        var video_codec_id = video_stream[].codecpar[].codec_id
+        var video_codec = avcodec.avcodec_find_decoder(video_codec_id)
+        var video_codec_ctx = avcodec.avcodec_alloc_context3(video_codec)
+        var video_data = VideoData()
+        video_datas.append(video_data^)
+        # Copy codec parameters (including extradata/SPS/PPS for H.264) from stream.
+        # Required for MP4/AVCC format; without this the decoder expects Annex B start codes.
+        ret = avcodec.avcodec_parameters_to_context(
+            video_codec_ctx, video_stream[].codecpar
+        )
+        if ret < 0:
+            raise Error(
+                "Failed to copy codec parameters: {}".format(
+                    avutil.av_err2str(ret)
+                )
+            )
+        ret = avcodec.avcodec_open2(video_codec_ctx, video_codec)
+        if ret < 0:
+            raise Error("Failed to open video codec: {}".format(ret))
+        while True:
+            ret = avformat.av_read_frame(oc, packet)
+            if ret < 0:
+                if ret == Int32(AVERROR_EOF):
+                    break
+                raise Error(
+                    "Failed to read frame: {}".format(avutil.av_err2str(ret))
+                )
+
+            if Int(packet[].stream_index) in video_stream_mapping:
+                var pkt_ret = decode_packet(
+                    oc, video_codec_ctx, packet, frame, video_datas[-1]
+                )
+
+            avcodec.av_packet_unref(packet)
+            if ret < 0:
+                break
+
+        avcodec.avcodec_free_context(video_codec_ctx)
+        # avcodec.avcodec_close(video_codec_ctx)
+
+    avcodec.av_packet_free(packet)
+    avutil.av_frame_free(frame)
+    return video_datas^
+
+
+struct OutputStream(Copyable, Movable):
     var st: UnsafePointer[AVStream, origin=MutExternalOrigin]
     var enc: UnsafePointer[AVCodecContext, origin=MutExternalOrigin]
     var next_pts: c_long_long
@@ -118,74 +343,98 @@ struct OutputStream(Movable):
             avcodec.avcodec_free_context(self.enc)
 
 
-def alloc_frame(
-    pix_fmt: AVPixelFormat.ENUM_DTYPE,
-    width: c_int,
-    height: c_int,
-) raises -> UnsafePointer[AVFrame, MutExternalOrigin]:
-    # var frame = alloc[AVFrame](1)
-
-    var frame = avutil.av_frame_alloc()
-
-    frame[].format = pix_fmt
-    frame[].width = width
-    frame[].height = height
-
-    ret = avutil.av_frame_get_buffer(frame, 0)
-    if ret < 0:
-        std.os.abort("Failed to allocate frame buffer")
-
-    return frame
-
-
-def open_video(
-    oc: UnsafePointer[AVFormatContext, MutExternalOrigin],
-    video_codec: UnsafePointer[AVCodec, ImmutExternalOrigin],
+def get_video_frame(
     mut ost: OutputStream,
-    opt_arg: UnsafePointer[AVDictionary, ImmutExternalOrigin],
-) raises:
-    var ret: c_int = 0
+    video_data: VideoData,
+) raises -> UnsafePointer[AVFrame, MutExternalOrigin]:
     var c = ost.enc
-    # NOTE: We need to add an override to avcodec_open2 that makes
-    # an internal null pointer. Debug mode otherwise fails on this.
-    var opt = UnsafePointer[AVDictionary, MutExternalOrigin]()
-    var opt_ptr = alloc[UnsafePointer[AVDictionary, MutExternalOrigin]](1)
-    opt_ptr[] = opt
-    print("im opening a video")
 
-    _ = avcodec.avcodec_open2(c, video_codec, opt_ptr)
-    # av_dict_free(&opt);
+    var comparison = avutil.av_compare_ts(
+        ost.next_pts,
+        c[].time_base,
+        c_long_long(Int(STREAM_DURATION)),
+        AVRational(num=1, den=1),
+    )
 
-    ost.frame = alloc_frame(c[].pix_fmt, c[].width, c[].height)
-    if not ost.frame:
-        std.os.abort("Failed to allocate video frame")
+    if comparison > 0:
+        _logger.info("No more frames to encode")
+        return UnsafePointer[AVFrame, MutExternalOrigin]()
 
-    ost.tmp_frame = UnsafePointer[AVFrame, MutExternalOrigin]()
-    if c[].pix_fmt != AVPixelFormat.AV_PIX_FMT_YUV420P._value:
-        ost.tmp_frame = alloc_frame(
-            AVPixelFormat.AV_PIX_FMT_YUV420P._value,
-            c[].width,
-            c[].height,
-        )
-        if not ost.tmp_frame:
-            std.os.abort("Failed to allocate temporary video frame")
-
-    ret = avcodec.avcodec_parameters_from_context(ost.st[].codecpar, c)
-    if ret < 0:
-        std.os.abort("Failed to copy the stream parameters")
-
+    _ = comparison
     _ = c
+
+    if avutil.av_frame_make_writable(ost.frame) < 0:
+        raise Error("Failed to make frame writable")
+
+    var frame_idx = c_int(ost.next_pts)
+    print("len video data frames: ", len(video_data.data))
+    var frame_ptr = video_data.data[frame_idx]
+
+    for c in range(video_data.n_color_spaces):
+        var ptr = ost.frame[].data[c]
+        var linesize = video_data.linesizes[c]
+        for idx in range(linesize * video_data.height):
+            ptr[][Int(idx)] = frame_ptr[idx]
+
+        frame_ptr += linesize * video_data.height
+
+    # NOTE They use ++ which I think increments the next ptr itself actually, but
+    # assignes the previous value to pts.
+    ost.frame[].pts = ost.next_pts
+    ost.next_pts += 1
+    print("Next PTS: ", ost.next_pts)
+
+    return ost.frame
+
+
+def write_frame(
+    mut fmt_ctx: UnsafePointer[AVFormatContext, MutExternalOrigin],
+    mut ost: OutputStream,
+    video_data: VideoData,
+) raises -> c_int:
+    if ost.next_pts >= len(video_data.data):
+        return c_int(Int32(AVERROR_EOF))
+    var frame = get_video_frame(ost, video_data)
+
+    ref pkt = ost.tmp_pkt
+    ref st = ost.st
+    ref c = ost.enc
+
+    var ret = avcodec.avcodec_send_frame(c, frame)
+    if ret < 0:
+        raise Error("Failed to send frame: {}".format(ret))
+
+    while ret >= 0:
+        ret = avcodec.avcodec_receive_packet(c, pkt)
+        if ret == AVERROR(ErrNo.EAGAIN.value) or ret == Int32(AVERROR_EOF):
+            break
+        elif ret < 0:
+            raise Error("Failed to receive packet: {}".format(ret))
+
+        avcodec.av_packet_rescale_ts(pkt, c[].time_base, st[].time_base)
+        pkt[].stream_index = st[].index
+        ret = avformat.av_interleaved_write_frame(fmt_ctx, pkt)
+        if ret < 0:
+            raise Error("Failed to write packet: {}".format(ret))
+
+        avcodec.av_packet_unref(pkt)
+        if ret < 0:
+            break
+
+    return c_int(ret == Int32(AVERROR_EOF))
 
 
 def add_stream(
-    mut ost: OutputStream,
+    mut osts: List[OutputStream],
     oc: UnsafePointer[AVFormatContext, MutExternalOrigin],
     codec: UnsafePointer[
         UnsafePointer[AVCodec, ImmutExternalOrigin], MutExternalOrigin
     ],
     codec_id: AVCodecID.ENUM_DTYPE,
+    video_data: VideoData,
 ) raises:
     var i: c_int = 0
+    var ost = OutputStream()
     # var c = alloc[AVCodecContext](1)
 
     codec[] = avcodec.avcodec_find_encoder(codec_id)
@@ -243,8 +492,8 @@ def add_stream(
         c[].codec_id = codec_id
         c[].bit_rate = 400000
         # Resolution must be multople of two
-        c[].width = 352
-        c[].height = 288
+        c[].width = video_data.width
+        c[].height = video_data.height
 
         # Timebase: This is the fundamental unit of time (in seconds) in terms
         # of which frame timestamps are represented. For fixed-gps content
@@ -254,7 +503,7 @@ def add_stream(
         c[].time_base = ost.st[].time_base
 
         c[].gop_size = 12  # Emit one intra frame every twelve frames at most
-        c[].pix_fmt = STREAM_PIX_FMT
+        c[].pix_fmt = video_data.format
         if codec_id == AVCodecID.AV_CODEC_ID_MPEG2VIDEO._value:
             # Just for testing, we also add B-frames
             c[].max_b_frames = 2
@@ -271,310 +520,78 @@ def add_stream(
         c[].flags |= AV_CODEC_FLAG_GLOBAL_HEADER
 
     # ost.enc = ret
+    osts.append(ost^)
 
 
-def log_packet(
-    fmt_ctx: UnsafePointer[AVFormatContext, MutExternalOrigin],
-    pkt: UnsafePointer[AVPacket, MutExternalOrigin],
-) raises:
-    print(
-        "pts:{} dts:{} duration:{} stream_index:{}".format(
-            pkt[].pts,
-            pkt[].dts,
-            pkt[].duration,
-            pkt[].stream_index,
-        )
-    )
-
-
-def fill_yuv_image(
-    frame: UnsafePointer[AVFrame, MutExternalOrigin],
-    frame_index: c_int,
-    width: c_int,
-    height: c_int,
-) raises:
-    var x: c_int = 0
-    var y: c_int = 0
-    var i: c_int = frame_index
-    for y in range(height):
-        for x in range(width):
-            frame[].data[0][y * frame[].linesize[0] + x] = c_uchar(
-                x + y + i * 3
-            )
-    for y in range(height / 2):
-        for x in range(width / 2):
-            frame[].data[1][y * frame[].linesize[1] + x] = c_uchar(
-                128 + y + i * 2
-            )
-            frame[].data[2][y * frame[].linesize[2] + x] = c_uchar(
-                64 + x + i * 5
-            )
-
-
-def get_video_frame(
-    mut ost: OutputStream,
-) raises -> UnsafePointer[AVFrame, MutExternalOrigin]:
-    var c = ost.enc
-
-    var comparison = avutil.av_compare_ts(
-        ost.next_pts,
-        c[].time_base,
-        c_long_long(Int(STREAM_DURATION)),
-        AVRational(num=1, den=1),
-    )
-
-    if comparison > 0:
-        return UnsafePointer[AVFrame, MutExternalOrigin]()
-
-    _ = comparison
-    _ = c
-
-    if avutil.av_frame_make_writable(ost.frame) < 0:
-        std.os.abort("Failed to make frame writable")
-
-    if c[].pix_fmt != AVPixelFormat.AV_PIX_FMT_YUV420P._value:
-        if not ost.sws_ctx:
-            ost.sws_ctx = swscale.sws_getContext(
-                c[].width,
-                c[].height,
-                AVPixelFormat.AV_PIX_FMT_YUV420P._value,
-                c[].width,
-                c[].height,
-                c[].pix_fmt,
-                SCALE_FLAGS.value,
-                UnsafePointer[SwsFilter, MutExternalOrigin](),
-                UnsafePointer[SwsFilter, MutExternalOrigin](),
-                UnsafePointer[c_double, ImmutExternalOrigin](),
-            )
-            if not ost.sws_ctx:
-                std.os.abort("Failed to initialize conversion context")
-
-            # API wise, this seems problematic no? These are all long longs
-            # and we are converting to ints.
-            fill_yuv_image(
-                ost.tmp_frame,
-                c_int(ost.next_pts),
-                c_int(c[].width),
-                c_int(c[].height),
-            )
-
-            # TODO: There has to be a better way to do this.
-            # We should at least not be doing the allocations in a hot loop.
-            var src_slice = alloc[UnsafePointer[c_uchar, ImmutExternalOrigin]](
-                len(ost.tmp_frame[].data)
-            )
-            for i in range(len(ost.tmp_frame[].data)):
-                src_slice[i] = ost.tmp_frame[].data[i].as_immutable()
-
-            var dst = alloc[UnsafePointer[c_uchar, MutExternalOrigin]](
-                len(ost.frame[].data)
-            )
-            for i in range(len(ost.frame[].data)):
-                dst[i] = ost.frame[].data[i]
-
-            # NOTE: https://github.com/modular/modular/pull/5715
-            # adds unsafe_ptr to StaticTuple, which is needed for this.
-            var res = swscale.sws_scale(
-                ost.sws_ctx,
-                src_slice,
-                ost.tmp_frame[].linesize.unsafe_ptr(),
-                0,
-                c[].height,
-                dst,
-                ost.frame[].linesize.unsafe_ptr(),
-            )
-            if res < 0:
-                std.os.abort("Failed to scale image")
-    else:
-        fill_yuv_image(
-            ost.frame, c_int(ost.next_pts), c_int(c[].width), c_int(c[].height)
-        )
-
-    # NOTE They use ++ which I think increments the next ptr itself actually, but
-    # assignes the previous value to pts.
-    ost.frame[].pts = ost.next_pts
-    ost.next_pts += 1
-
-    return ost.frame
-
-
-def write_frame(
-    fmt_ctx: UnsafePointer[AVFormatContext, MutExternalOrigin],
-    c: UnsafePointer[AVCodecContext, MutExternalOrigin],
-    st: UnsafePointer[AVStream, MutExternalOrigin],
-    frame: UnsafePointer[AVFrame, MutExternalOrigin],
-    pkt: UnsafePointer[AVPacket, MutExternalOrigin],
-) raises -> c_int:
-    # TODO: Check pkt. It looks completely invalid.
-    var ret = c_int(0)
-    ret = avcodec.avcodec_send_frame(c, frame)
-    if ret < 0:
-        std.os.abort("Failed to send frame to encoder")
-    _ = frame
-    while ret >= 0:
-        ret = avcodec.avcodec_receive_packet(c, pkt)
-
-        if ret == AVERROR(ErrNo.EAGAIN.value) or ret == Int32(AVERROR_EOF):
-            break
-        elif ret < 0:
-            print(avutil.av_err2str(ret))
-            std.os.abort(
-                "Failed to receive packet from encoder with ret val: {}".format(
-                    ret
-                )
-            )
-
-        avcodec.av_packet_rescale_ts(pkt, c[].time_base, st[].time_base)
-        pkt[].stream_index = st[].index
-
-        log_packet(fmt_ctx, pkt)
-        ret = avformat.av_interleaved_write_frame(fmt_ctx, pkt)
-        if ret < 0:
-            std.os.abort("Failed to write output packet")
-
-    # _ = avcodec
-    # _ = avformat
-    return c_int(ret == Int32(AVERROR_EOF))
-
-
-def write_video_frame(
-    oc: UnsafePointer[AVFormatContext, MutExternalOrigin],
-    mut ost: OutputStream,
-) raises -> c_int:
-    var ret = write_frame(
-        fmt_ctx=oc,
-        c=ost.enc,
-        st=ost.st,
-        frame=get_video_frame(ost),
-        pkt=ost.tmp_pkt,
-    )
-    return ret
-
-
-def test_av_mux_example() raises:
-    """From: https://www.ffmpeg.org/doxygen/8.0/mux_8c-example.html."""
-    var video_st = OutputStream()
-    # NOTE: Not interested in audio at the moment.
-    # var audio_st = OutputStream()
-    var fmt = alloc[UnsafePointer[AVOutputFormat, ImmutExternalOrigin]](1)
+def video_save(video_datas: List[VideoData], path: Path) raises:
+    _logger.info("Saving video to path: ", path)
+    var packet = avcodec.av_packet_alloc()
+    var frame = avutil.av_frame_alloc()
+    # alloc_output_context expects pointer-to-pointer: it allocates a new context
+    # and stores it in *ctx. Passing a raw pointer causes use-after-free.
     var oc = alloc[UnsafePointer[AVFormatContext, MutExternalOrigin]](1)
-    # NOTE: Not interested in audio at the moment.
-    # var audio_codec = AVCodec()
-    var video_codec = alloc[UnsafePointer[AVCodec, ImmutExternalOrigin]](1)
-    var ret = c_int(0)
-    var have_video = c_int(0)
-    # NOTE: Not interested in audio at the moment.
-    # var have_audio = c_int(0)
-    var encode_video = c_int(0)
-    # var encode_audio = c_int(0)
+    var path_s = String(path)
+    var ret = avformat.alloc_output_context(
+        ctx=oc,
+        filename=path_s,
+    )
+    if ret < 0:
+        raise Error("Failed to allocate output context: {}".format(ret))
+    if not oc[]:
+        raise Error("Failed to allocate output context")
     var opt = alloc[UnsafePointer[AVDictionary, MutExternalOrigin]](1)
     opt[] = UnsafePointer[
         AVDictionary, MutExternalOrigin
     ]()  # NULL, let FFmpeg manage
-    var opt2 = alloc[UnsafePointer[AVDictionary, MutExternalOrigin]](1)
-    opt2[] = UnsafePointer[
-        AVDictionary, MutExternalOrigin
-    ]()  # NULL, let FFmpeg manage
-    var i = c_int(0)
 
-    var test_data_root = std.os.getenv("PIXI_PROJECT_ROOT")
-    var input_filename: String = (
-        "{}/test_data/testsrc_320x180_30fps_2s.h264".format(test_data_root)
-    )
-    var output_filename: String = (
-        "{}/test_data/dash_manual/testsrc_320x180_30fps_2s.mp4".format(
-            test_data_root
+    var fmt = UnsafePointer(to=oc[][].oformat)
+    if not fmt:
+        raise Error("Failed to find output format")
+    if fmt[][].video_codec == AVCodecID.AV_CODEC_ID_NONE._value:
+        raise Error("Failed to find video codec")
+    var video_codec = UnsafePointer(to=oc[][].video_codec)
+
+    var output_streams = List[OutputStream](capacity=Int(len(video_datas)))
+    for ref video_data in video_datas:
+        add_stream(
+            output_streams, oc[], video_codec, fmt[][].video_codec, video_data
         )
-    )
-
-    var parent_path_parts = Path(output_filename).parts()[:-1]
-    var parent_path = Path(String(std.os.sep).join(parent_path_parts))
-    std.os.makedirs(parent_path, exist_ok=True)
-    # FIXME: Tryout without any flags, just h264 to mp4.
-    # ret = avformat.alloc_output_context(oc, output_filename)
-
-    ret = avformat.alloc_output_context(
-        ctx=oc,
-        filename=output_filename,
-    )
-    if not oc or ret < 0:
-        std.os.abort("Failed to allocate output context")
-        # Note: The example: mux.c will switch to 'mpeg' on failure. In our case
-        # however, we want to be strict about the expected behavior.
-
-    fmt[] = oc[][].oformat
-    video_codec[] = oc[][].video_codec
-
-    if fmt[][].video_codec != AVCodecID.AV_CODEC_ID_NONE._value:
-        print("video codec is not none: ", fmt[][].video_codec)
-        add_stream(video_st, oc[], video_codec, fmt[][].video_codec)
-        have_video = 1
-        encode_video = 1
-    else:
-        print("video codec is none")
-    if fmt[][].audio_codec != AVCodecID.AV_CODEC_ID_NONE._value:
-        print("audio codec is not none")
-    else:
-        print("audio codec is none")
-
-    if have_video:
-        open_video(oc[], video_codec[], video_st, opt[])
-
-    # Not interested in audio at the moment.
-    # if have_audio:
-    #     open_audio(avformat, avcodec, oc[], audio_codec[], audio_st, opt[])
+        open_video(oc[], video_codec[], output_streams[-1], opt[])
 
     avformat.av_dump_format(
         oc[],
         0,
-        output_filename,
+        path_s,
         1,
     )
-
     if not (fmt[][].flags & AVFMT_NOFILE):
         ret = avformat.avio_open(
             UnsafePointer(to=oc[][].pb),
-            output_filename,
+            path_s,
             AVIO_FLAG_WRITE,
         )
         if ret < 0:
-            std.os.abort("Failed to open output file: {}".format(ret))
-            # TODO: Not sure if mojo can access stderror or not?
-            # Would be ideal since that would surface the error message to the user.
-            # fprintf(stderr, "Could not open '%s': %s\n", filename,
-            #         av_err2str(ret));
+            raise Error("Failed to open output file: {}".format(ret))
 
-    print("writing header")
     ret = avformat.avformat_write_header(
         oc[],
-        opt2,
+        opt,
     )
-    print("dune writing")
     if ret < 0:
-        std.os.abort("Failed to write header: {}".format(ret))
-        # TODO: Not sure if mojo can access stderror or not?
-        # Would be ideal since that would surface the error message to the user.
-        # fprintf(stderr, "Error occurred when opening output file: %s\n",
-        #         av_err2str(ret));
+        raise Error("Failed to write header: {}".format(ret))
 
-    while encode_video:
-        # TODO: This if statement is only needed when using audio.
-        # if encode_video and avutil.av_compare_ts(
-        #     video_st.next_pts,
-        #     video_st.enc->time_base,
-        #     audio_st.next_pts,
-        #     audio_st.enc->time_base
-        # ) <= 0:
-        if encode_video:
-            var result = write_video_frame(oc[], video_st)
-            # print("Result: {}".format(result))
-            encode_video = c_int(result == 0)
-        # else:
-        #     encode_audio = !write_audio_frame(oc, &audio_st)
+    var i = 0
+    for ref stream in output_streams:
+        ref video_data = video_datas[i]
+        var do_encode_video = True
+        while do_encode_video:
+            var ret = write_frame(oc[], stream, video_data)
+            do_encode_video = Bool(ret == 0)
+        i += 1
 
     ret = avformat.av_write_trailer(oc[])
     if ret < 0:
-        std.os.abort("Failed to write trailer: {}".format(ret))
+        raise Error("Failed to write trailer: {}".format(ret))
 
     if oc[]:
         if not (fmt[][].flags & AVFMT_NOFILE) and oc[][].pb:
@@ -583,113 +600,3 @@ def test_av_mux_example() raises:
             _ = avformat.avio_closep(pb_ptr)
             oc[][].pb = pb_ptr[]
             pb_ptr.free()
-        avformat.avformat_free_context(oc[])
-
-
-struct VideoData:
-    var data: List[UnsafePointer[c_uchar, MutAnyOrigin]]
-    var width: c_int
-    var height: c_int
-    var format: AVPixelFormat.ENUM_DTYPE
-    var n_color_spaces: c_int
-    var n_frames: c_int
-
-    fn __init__(out self):
-        self.width = 0
-        self.height = 0
-        self.format = AVPixelFormat.AV_PIX_FMT_NONE._value
-        self.n_color_spaces = 0
-        self.data = List[UnsafePointer[c_uchar, MutAnyOrigin]]()
-        self.n_frames = 0
-
-    fn __del__(deinit self):
-        for i in range(len(self.data)):
-            self.data[i].free()
-
-
-def decode_packet(
-    oc: UnsafePointer[AVFormatContext, MutExternalOrigin],
-    video_codec_ctx: UnsafePointer[AVCodecContext, MutExternalOrigin],
-    packet: UnsafePointer[AVPacket, MutExternalOrigin],
-    frame: UnsafePointer[AVFrame, MutExternalOrigin],
-) raises -> c_int:
-    var ret = avcodec.avcodec_send_packet(video_codec_ctx, packet)
-    if ret < 0:
-        raise Error("Failed to send packet: {}".format(avutil.av_err2str(ret)))
-
-    while ret >= 0:
-        ret = avcodec.avcodec_receive_frame(video_codec_ctx, frame)
-        if ret == AVERROR(ErrNo.EAGAIN.value) or ret == Int32(AVERROR_EOF):
-            break
-        elif ret < 0:
-            raise Error(
-                "Failed to receive frame: {}".format(avutil.av_err2str(ret))
-            )
-
-        print("Frame received: {}".format(frame[].pts))
-
-    return ret
-
-
-def video_read[in_buffer_size: c_int = 4096](path: Path) raises:
-    if not path.exists():
-        raise Error("File does not exist: {}".format(path))
-
-    _logger.info("Reading video from path: ", path)
-    var packet = avcodec.av_packet_alloc()
-    var frame = avutil.av_frame_alloc()
-    var oc = avformat.avformat_alloc_context()
-    var output_buffer = List[c_uchar](capacity=Int(in_buffer_size))
-    var path_copy = String(path).copy()
-    var ret = avformat.avformat_open_input(
-        s=oc, url=path_copy, fmt=None, options=None
-    )
-    if ret < 0:
-        raise Error("Failed to open input: {}".format(ret))
-    ret = avformat.avformat_find_stream_info(ic=oc, options=None)
-    if ret < 0:
-        raise Error("Failed to find stream info: {}".format(ret))
-
-    var video_stream_mapping = List[Int](capacity=Int(oc[].nb_streams))
-    print("Number of streams: {}".format(oc[].nb_streams))
-    for i in range(oc[].nb_streams):
-        var in_stream = oc[].streams[i]
-        var codecpar = in_stream[].codecpar
-        if codecpar[].codec_type == AVMediaType.AVMEDIA_TYPE_VIDEO._value:
-            _logger.info("Found video stream: {}".format(i))
-            video_stream_mapping.append(Int(i))
-
-    for i in video_stream_mapping:
-        var video_stream = oc[].streams[i]
-        var video_codec_id = video_stream[].codecpar[].codec_id
-        var video_codec = avcodec.avcodec_find_decoder(video_codec_id)
-        var video_codec_ctx = avcodec.avcodec_alloc_context3(video_codec)
-        # Copy codec parameters (including extradata/SPS/PPS for H.264) from stream.
-        # Required for MP4/AVCC format; without this the decoder expects Annex B start codes.
-        ret = avcodec.avcodec_parameters_to_context(
-            video_codec_ctx, video_stream[].codecpar
-        )
-        if ret < 0:
-            raise Error(
-                "Failed to copy codec parameters: {}".format(
-                    avutil.av_err2str(ret)
-                )
-            )
-        ret = avcodec.avcodec_open2(video_codec_ctx, video_codec)
-        if ret < 0:
-            raise Error("Failed to open video codec: {}".format(ret))
-        while True:
-            ret = avformat.av_read_frame(oc, packet)
-            if ret < 0:
-                if ret == Int32(AVERROR_EOF):
-                    break
-                raise Error(
-                    "Failed to read frame: {}".format(avutil.av_err2str(ret))
-                )
-
-            if Int(packet[].stream_index) in video_stream_mapping:
-                var pkt_ret = decode_packet(oc, video_codec_ctx, packet, frame)
-
-            avcodec.av_packet_unref(packet)
-            if ret < 0:
-                break
