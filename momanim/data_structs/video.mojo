@@ -20,6 +20,11 @@ struct VideoFrame[dtype: DType = DType.uint8](Copyable, Movable, Writable):
 
 struct Video[dtype: DType = DType.uint8](Movable, Writable):
     var _frames: List[VideoFrame[Self.dtype]]
+    """Frames for videos. These are private since the user should use `frame()` which 
+    composes the underlying frame data with its width / height.
+
+    The `VideoFrame` is intended to be very very minimal.
+    """
     var w: UInt
     var h: UInt
     var ch: UInt
