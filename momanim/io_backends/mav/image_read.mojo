@@ -33,12 +33,14 @@ struct ImageInfo(Writable):
     var height: c_int
     var format: AVPixelFormat.ENUM_DTYPE
     var n_color_spaces: c_int
+    var line_size: c_int
 
     fn __init__(out self):
         self.width = 0
         self.height = 0
         self.format = AVPixelFormat.AV_PIX_FMT_NONE._value
         self.n_color_spaces = 0
+        self.line_size = 0
 
 
 fn decode(
@@ -61,7 +63,7 @@ fn decode(
         image_info.height = frame[].height
         image_info.format = dec_ctx[].pix_fmt
         image_info.n_color_spaces = dec_ctx[].color_range
-
+        image_info.line_size = frame[].linesize[0]
         # TODO: We should instead extend via passing in a List, that way
         # we do a chunked move operation instead of a copy which is
         # what is happening here. (dont be fooled by the ptr pass)
@@ -161,6 +163,7 @@ fn image_read[
     var image = Image[c_uchar.dtype](
         output_buffer.unsafe_ptr().unsafe_origin_cast[MutExternalOrigin](),
         len(output_buffer),
+        UInt(image_info.line_size),
     )
     image.w = UInt(image_info.width)
     image.h = UInt(image_info.height)

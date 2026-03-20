@@ -26,6 +26,27 @@ def test_image_read() raises:
     assert_equal(image._data.ptr[49151], 255)
 
 
+def test_image_read_127x127() raises:
+    """127x127: width*3=381. Verifies image read + numojo indexing with line_size.
+    """
+    var test_data_root = getenv("PIXI_PROJECT_ROOT")
+    var root_path = join(
+        test_data_root, "test_data/generate_test_videos_testsrc_127x127.png"
+    )
+    var image = image_read(root_path)
+    assert_equal(image.w, 127)
+    assert_equal(image.h, 127)
+    assert_equal(image.ch, 3)
+    assert_equal(image.line_size, 128 * 3)
+    var arr = image.numojo()
+    assert_equal(arr.item(0, 0, 0), 0)
+    assert_equal(arr.item(0, 0, 1), 0)
+    assert_equal(arr.item(0, 0, 2), 0)
+    assert_equal(arr.item(126, 126, 0), 255)
+    assert_equal(arr.item(126, 126, 1), 255)
+    assert_equal(arr.item(126, 126, 2), 255)
+
+
 def test_image_save() raises:
     var test_data_root = getenv("PIXI_PROJECT_ROOT")
     var root_path = join(
@@ -98,5 +119,6 @@ def test_video_read() raises:
 
 def main() raises:
     # TestSuite.discover_tests[__functions_in_module()]().run()
+    test_image_read_127x127()
     # test_image_save()
     test_video_read()

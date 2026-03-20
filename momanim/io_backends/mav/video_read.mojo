@@ -158,26 +158,11 @@ def decode_packet(
                 src_format=frame[].format,
                 dst_format=AVPixelFormat.AV_PIX_FMT_RGB24._value,
             )
-
-            if len(video._frames) == 0:
-                print(
-                    "linesize[0]: ",
-                    tmp_frame[].linesize[0],
-                    " width*3: ",
-                    frame[].width * 3,
-                )
             video.steal_frame(
                 tmp_frame[].data.unsafe_ptr(),
                 Int(tmp_frame[].linesize[0]),
             )
         else:
-            if len(video._frames) == 0:
-                print(
-                    "linesize[0]: ",
-                    frame[].linesize[0],
-                    " width*3: ",
-                    frame[].width * 3,
-                )
             video.steal_frame(
                 frame[].data.unsafe_ptr(),
                 Int(frame[].linesize[0]),

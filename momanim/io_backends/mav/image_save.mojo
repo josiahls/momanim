@@ -108,6 +108,7 @@ fn image_save(image: Image[c_uchar.dtype], path: Path) raises:
         # Also we really need to factor in whether the pointer is
         # even the correct format.
         frame[].data[0] = image._data.ptr
+        frame[].linesize[0] = c_int(image.line_size)
 
         frame[].pts = c_long_long(i)
         i += 1
