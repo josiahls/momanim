@@ -1,24 +1,29 @@
 from numojo.core import DataContainer
 from std.ffi import c_uchar
 from momanim.constants import ColorSpace
+import numojo as nm
 
 
 struct VideoFrame[dtype: DType = DType.uint8](Copyable, Movable, Writable):
     var _data: DataContainer[Self.dtype]
+    var _linesize: Int
+    """Bytes per row (row stride). Must match the underlying buffer layout."""
 
     fn __init__(
         out self,
         var ptr: UnsafePointer[Scalar[Self.dtype], MutExternalOrigin],
         size: Int,
+        linesize: Int,
     ) raises:
         self._data = DataContainer(
             ptr=ptr.unsafe_origin_cast[MutExternalOrigin](),
             size=size,
             copy=False,
         )
+        self._linesize = linesize
 
 
-struct Video[dtype: DType = DType.uint8](Movable, Writable):
+struct Video[dtype: DType = DType.uint8](Copyable, Movable, Writable):
     var _frames: List[VideoFrame[Self.dtype]]
     """Frames for videos. These are private since the user should use `frame()` which 
     composes the underlying frame data with its width / height.
@@ -34,6 +39,14 @@ struct Video[dtype: DType = DType.uint8](Movable, Writable):
     var io_backend_opaque_params: Dict[String, OpaquePointer[MutExternalOrigin]]
     """Private params used by the io backend to read or write this Video."""
 
+    fn __init__(out self) raises:
+        self.w = 0
+        self.h = 0
+        self.ch = 0
+        self._frames = List[VideoFrame[Self.dtype]]()
+        self.color_space = ColorSpace.RGB_24
+        self.io_backend_opaque_params = {}
+
     fn __init__(out self, var elems: List[Scalar[Self.dtype]]) raises:
         self.w = UInt(len(elems))
         if len(elems) % 3 != 0:
@@ -47,6 +60,7 @@ struct Video[dtype: DType = DType.uint8](Movable, Writable):
         self._frames = List[VideoFrame[Self.dtype]]()
         var frame = VideoFrame(
             elems.unsafe_ptr().unsafe_origin_cast[MutExternalOrigin](),
+            len(elems),
             len(elems),
         )
         self._frames.append(frame^)
@@ -68,7 +82,30 @@ struct Video[dtype: DType = DType.uint8](Movable, Writable):
         self.h = 1
         self.ch = 1
         self._frames = List[VideoFrame[Self.dtype]]()
-        var frame = VideoFrame(ptr, size)
+        var frame = VideoFrame(ptr, size, size)
         self._frames.append(frame^)
         self.color_space = ColorSpace.RGB_24
         self.io_backend_opaque_params = {}
+
+    fn steal_frame(
+        mut self,
+        var frame_ptr: UnsafePointer[
+            UnsafePointer[Scalar[Self.dtype], MutExternalOrigin],
+            MutExternalOrigin,
+        ],
+        linesize: Int,
+    ) raises:
+        var buf_size = linesize * Int(self.h)
+        var frame = VideoFrame[Self.dtype](frame_ptr[0], buf_size, linesize)
+        self._frames.append(frame^)
+
+    fn numojo(mut self, frame_idx: Int) raises -> nm.NDArray[Self.dtype]:
+        var row_stride = self._frames[frame_idx]._linesize
+        var array = nm.NDArray[Self.dtype](
+            shape=nm.NDArrayShape(Int(self.h), Int(self.w), Int(self.ch)),
+            is_view=True,
+            data=self._frames[frame_idx]._data.copy(),
+            strides=nm.NDArrayStrides(row_stride, Int(self.ch), 1),
+            offset=0,
+        )
+        return array^

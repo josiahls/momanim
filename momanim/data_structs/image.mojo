@@ -1,6 +1,7 @@
 from numojo.core import DataContainer
 from std.ffi import c_uchar
 from momanim.constants import ColorSpace
+import numojo as nm
 
 
 struct Image[dtype: DType = DType.uint8](Movable, Writable):
@@ -53,3 +54,14 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
         )
         self.color_space = ColorSpace.RGB_24
         self.io_backend_opaque_params = {}
+
+    fn numojo(mut self) raises -> nm.NDArray[c_uchar.dtype]:
+        var array = nm.NDArray(
+            shape=nm.NDArrayShape(Int(self.h), Int(self.w), Int(self.ch)),
+            is_view=True,
+            data=self._data,
+            # TODO: I think we need to factor in the linesize somehow.
+            strides=nm.NDArrayStrides(1, 1, 1),
+            offset=0,
+        )
+        return array^
