@@ -9,7 +9,13 @@ from mav.ffmpeg.avcodec.avcodec import AVCodecContext
 from mav.ffmpeg.swscale.swscale import SwsFlags
 
 
-comptime SCALE_FLAGS = SwsFlags.SWS_BICUBIC
+# BITEXACT + ACCURATE_RND: YUV→RGB rounding can otherwise differ by ±1 between
+# SIMD implementations (e.g. AArch64 NEON vs x86), breaking pixel-exact tests.
+comptime SCALE_FLAGS = SwsFlags(
+    SwsFlags.SWS_BICUBIC.value
+    | SwsFlags.SWS_ACCURATE_RND.value
+    | SwsFlags.SWS_BITEXACT.value
+)
 
 
 def convert_format(

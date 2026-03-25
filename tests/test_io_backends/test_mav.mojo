@@ -80,10 +80,11 @@ def test_video_read() raises:
         assert_equal(frame.shape[0], 180)
         assert_equal(frame.shape[1], 320)
         assert_equal(frame.shape[2], 3)
+        # Anchor RGBs match AArch64/x86 with SWS_BITEXACT|ACCURATE_RND (mav/utils.mojo).
         if i == 59:
-            assert_equal(frame[0, 0].tolist(), [254, 0, 0])
+            assert_equal(frame[0, 0].tolist(), [253, 0, 0])
         elif i == 0:
-            assert_equal(frame[169, 309].tolist(), [0, 255, 255])
+            assert_equal(frame[169, 309].tolist(), [0, 254, 254])
 
         if i == 0:
             var segment_inc = 320 / 6
