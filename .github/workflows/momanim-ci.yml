@@ -89,7 +89,7 @@ jobs:
 
   test:
     needs: [check-changes, build]
-    if: !cancelled() && (needs.build.result == 'success' || needs.check-changes.outputs.should-build == 'false')
+    if: ${{ !cancelled() }} && (needs.build.result == 'success' || needs.check-changes.outputs.should-build == 'false')
     runs-on: ${{ matrix.runner.RUNNER_NAME }}
     strategy:
       max-parallel: 2
