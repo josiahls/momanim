@@ -34,23 +34,23 @@ backend = { name = "pixi-build-mojo", version = "0.1.*" }
 
 [package.host-dependencies]
 # Static version pin for now since Mojo nightly has high churn.
-mojo-compiler = "==0.26.2.0.dev2026030605,<0.27"
+mojo-compiler = "==0.26.2.0,<0.27"
 # ffmpeg has zlib version restrictions, thus can conflict with git.
 git = ">=2.53.0"
 openssh = ">=9.0"
 
 [package.build-dependencies]
 # Static version pin for now since Mojo nightly has high churn.
-mojo-compiler = "==0.26.2.0.dev2026030605,<0.27"
+mojo-compiler = "==0.26.2.0,<0.27"
 
 
 [package.run-dependencies]
 # Static version pin for now since Mojo nightly has high churn.
-mojo-compiler = "==0.26.2.0.dev2026030605,<0.27"
+mojo-compiler = "==0.26.2.0,<0.27"
 
 [dependencies]
 # Static version pin for now since Mojo nightly has high churn.
-mojo = "==0.26.2.0.dev2026030605,<0.27"
+mojo = "==0.26.2.0,<0.27"
 pre-commit = ">=4.5.0,<5"
 # Pin to LGPL build (no libx264/libx265) to avoid GPL copyleft
 ffmpeg = { version = "==8.0.1", build = "*lgpl*" }
