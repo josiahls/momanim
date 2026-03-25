@@ -6,12 +6,12 @@
 
 [submodule "NuMojo"]
     path = third_party/NuMojo
-    url = https://github.com/josiahls/NuMojo.git
+    url = git@github.com:josiahls/NuMojo.git
     branch = pre-0.9
     ignore = all
 
 [submodule "mav"]
     path = third_party/mav
-    url = https://github.com/josiahls/mav.git
+    url = git@github.com:josiahls/mav.git
     branch = main
     ignore = all
