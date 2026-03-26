@@ -140,10 +140,10 @@ def decode_packet(
             break
         _check(ret, "Failed to receive frame: {}")
 
-        if frame[].format != AVPixelFormat.AV_PIX_FMT_RGB24._value:
+        if frame[].format != AVPixelFormat.AV_PIX_FMT_RGBA._value:
             # TODO: Move out of the hot loop tbh.
             var tmp_frame = alloc_frame(
-                pix_fmt=AVPixelFormat.AV_PIX_FMT_RGB24._value,
+                pix_fmt=AVPixelFormat.AV_PIX_FMT_RGBA._value,
                 width=frame[].width,
                 height=frame[].height,
             )
@@ -156,7 +156,7 @@ def decode_packet(
                 sws_ctx=sws_ctx,
                 enc=video_codec_ctx,
                 src_format=frame[].format,
-                dst_format=AVPixelFormat.AV_PIX_FMT_RGB24._value,
+                dst_format=AVPixelFormat.AV_PIX_FMT_RGBA._value,
             )
             # TODO: I hate it. I hate it so much. We are copying data
             # from the frame. There is no reason to do this since we don't
@@ -241,8 +241,8 @@ def video_read[
         )
         video.w = UInt(video_stream[].codecpar[].width)
         video.h = UInt(video_stream[].codecpar[].height)
-        video.color_space = ColorSpace.RGB_24
-        video.ch = UInt(3)
+        video.color_space = ColorSpace.RGBA_32
+        video.ch = UInt(4)
         frame = alloc_frame(
             pix_fmt=video_codec_ctx[].pix_fmt,
             width=c_int(video.w),
@@ -272,6 +272,7 @@ def video_read[
             sws_ctx[] = UnsafePointer[SwsContext, MutExternalOrigin]()
         sws_ctx.free()
         videos.append(video^)
+
         var enc_ptr = alloc[UnsafePointer[AVCodecContext, MutExternalOrigin]](1)
         enc_ptr[] = video_codec_ctx
         avcodec.avcodec_free_context(enc_ptr)

@@ -267,7 +267,7 @@ def add_stream(
         ost.enc[].gop_size = (
             12  # Emit one intra frame every twelve frames at most
         )
-        # if video.color_space == ColorSpace.RGB_24:
+        # if video.color_space == ColorSpace.RGBA_32:
         #     c[].pix_fmt = AVPixelFormat.AV_PIX_FMT_RGB24._value
         # elif video.color_space == ColorSpace.YUV_420P:
         # TODO: Need to detect and dispatch to the correct pix_fmt for a given format.
@@ -314,10 +314,8 @@ def get_video_frame(
     var frame_ptr = video.unsafe_ptr(Int(frame_idx))
 
     if video.color_space != ColorSpace.YUV_420P:
-        if video.color_space == ColorSpace.RGB_24:
-            ost.conversion_frame[].format = (
-                AVPixelFormat.AV_PIX_FMT_RGB24._value
-            )
+        if video.color_space == ColorSpace.RGBA_32:
+            ost.conversion_frame[].format = AVPixelFormat.AV_PIX_FMT_RGBA._value
         else:
             raise Error("Unsupported color space: {}".format(video.color_space))
         ret = avutil.av_frame_make_writable(ost.conversion_frame)

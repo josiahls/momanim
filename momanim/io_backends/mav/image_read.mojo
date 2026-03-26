@@ -180,6 +180,8 @@ fn image_read[
     image.ch = UInt(image_info.n_color_spaces) + 1
     if image_info.format == AVPixelFormat.AV_PIX_FMT_RGB24._value:
         image.color_space = ColorSpace.RGB_24
+    elif image_info.format == AVPixelFormat.AV_PIX_FMT_RGBA._value:
+        image.color_space = ColorSpace.RGBA_32
     else:
         raise Error("Unsupported pixel format: ", image_info.format)
 

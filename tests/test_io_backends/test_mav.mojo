@@ -71,20 +71,20 @@ def test_video_read() raises:
     var videos = video_read(root_path)
     assert_equal(videos[0].w, 320)
     assert_equal(videos[0].h, 180)
-    assert_equal(videos[0].color_space, ColorSpace.RGB_24)
-    assert_equal(videos[0].ch, 3)
+    assert_equal(videos[0].color_space, ColorSpace.RGBA_32)
+    assert_equal(videos[0].ch, 4)
     assert_equal(len(videos[0]._frames), 60)
 
     for i in range(len(videos[0]._frames)):
         var frame = videos[0].numojo(i)
         assert_equal(frame.shape[0], 180)
         assert_equal(frame.shape[1], 320)
-        assert_equal(frame.shape[2], 3)
-        # Anchor RGBs match AArch64/x86 with SWS_BITEXACT|ACCURATE_RND (mav/utils.mojo).
+        assert_equal(frame.shape[2], 4)
+        # Anchor RGBAs match AArch64/x86 with SWS_BITEXACT|ACCURATE_RND (mav/utils.mojo).
         if i == 59:
-            assert_equal(frame[0, 0].tolist(), [253, 0, 0])
+            assert_equal(frame[0, 0].tolist(), [253, 0, 0, 255])
         elif i == 0:
-            assert_equal(frame[169, 309].tolist(), [0, 254, 254])
+            assert_equal(frame[169, 309].tolist(), [0, 254, 254, 255])
 
         if i == 0:
             var segment_inc = 320 / 6
