@@ -3,9 +3,13 @@ repos:
     hooks:
       - id: mojo-format
         name: mojo-format
-        entry: pixi run format
+        # Pin repo root + manifest: otherwise `pixi run format` can pick up another
+        # pixi.toml (e.g. third_party/mav) and run `mojo format mav` → "input 'mav' does not exist".
+        entry: bash -c 'root="$(git rev-parse --show-toplevel)" && exec pixi run --manifest-path "$root/pixi.toml" -x mojo format "$root/momanim"'
         language: system
-        files: '^(?!.*tests/test_c_project/build/).*\.(mojo|🔥)$'
-
-        stages: [commit]
+        pass_filenames: false
+        # Avoid two Mojo processes at once (crashdb lock: File exists).
+        require_serial: true
+        files: '^(?!.*third_party/).*\.(mojo|🔥)$'
+        stages: [pre-commit]
 
