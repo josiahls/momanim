@@ -1,7 +1,7 @@
 from momanim.animation.animation import Animatable
 
 
-trait Scene:
+trait Scenable(ImplicitlyDestructible, Movable):
     fn construct(self) -> None:
         """
         Construct the scene.
