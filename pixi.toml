@@ -63,7 +63,7 @@ install_pre_commit_hooks = { cmd = [
 
 conda_build = { cmd = "pixi build -o dist/" }
 conda_auth = { cmd = "pixi auth login anaconda.org  --conda-token $CONDA_TOKEN"}
-publish = { cmd = "find dist/ -name 'mav-*.conda' | xargs pixi upload anaconda --api-key $CONDA_TOKEN --owner josiahls" }
+publish = { cmd = "find dist/ -name 'momanim-*.conda' | xargs pixi upload anaconda --api-key $CONDA_TOKEN --owner josiahls" }
 conda_build_and_publish = [{ task = "conda_build" }, { task = "publish" }]
 
 
@@ -88,7 +88,7 @@ cmd = "bash tools/generate_test_videos.sh"
 depends-on = [ "install_pre_commit_hooks", "generate_test_videos" ]
 
 [tasks.package]
-cmd = "mojo package $MAV_INCLUDES mav"
+cmd = "mojo package $MAV_INCLUDES momanim"
 depends-on = [ "configure" ]
 
 [tasks.build]
@@ -108,7 +108,7 @@ cmd = "mojo build $MOJO_DEBUG_COMPILE_FLAGS --sanitize=address {{ file }} -o $(t
 args = ["file"]
 
 [tasks.format]
-cmd = "mojo format mav"
+cmd = "mojo format momanim"
 
 [tasks.valgrind]
 cmd = "valgrind --leak-check=full --track-origins=yes -s $(tools/mojo_build_ex.sh {{ file }})"
