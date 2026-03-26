@@ -9,10 +9,15 @@ struct ColorSpace(Enumable):
 
     comptime RGB_24 = Self(1)
     """Packed RGB 8:8:8, 24bpp, RGBRGB...
-    
+    """
+    comptime RGBA_32 = Self(2)
+    """Packed RGBA 8:8:8:8, 32bpp, RGBARGBA...
+
+    Contiains an alpha channel.
+
     Default for `momanim`. 
     """
-    comptime YUV_420P = Self(2)
+    comptime YUV_420P = Self(3)
     """Planar YUV 4:2:0, 12bpp, (1 Cr & Cb sample per 2x2 Y samples).
     
     Defualt in ffmpeg (at least their examples)

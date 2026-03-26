@@ -69,6 +69,8 @@ fn image_write(image: Image[c_uchar.dtype], path: Path) raises:
     context[].time_base = AVRational(num=1, den=25)
     if image.color_space == ColorSpace.RGB_24:
         context[].pix_fmt = AVPixelFormat.AV_PIX_FMT_RGB24._value
+    elif image.color_space == ColorSpace.RGBA_32:
+        context[].pix_fmt = AVPixelFormat.AV_PIX_FMT_RGBA._value
     elif image.color_space == ColorSpace.YUV_420P:
         context[].pix_fmt = AVPixelFormat.AV_PIX_FMT_YUV420P._value
     else:
