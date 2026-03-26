@@ -132,6 +132,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libxml2-16-2.15.2-hca6bf5a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libxml2-2.15.2-he237659_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libzlib-1.3.2-h25fd6f3_2.conda
+      - conda: https://conda.anaconda.org/josiahls/linux-64/mav-0.0.4-hb0f4dca_0.conda
       - conda: https://conda.modular.com/max-nightly/noarch/mblack-26.2.0-release.conda
       - conda: https://conda.modular.com/max-nightly/linux-64/mojo-0.26.2.0-release.conda
       - conda: https://conda.modular.com/max-nightly/linux-64/mojo-compiler-0.26.2.0-release.conda
@@ -318,6 +319,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/libxml2-16-2.15.2-h79dcc73_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/libxml2-2.15.2-h825857f_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/libzlib-1.3.2-hdc9db2a_2.conda
+      - conda: https://conda.anaconda.org/josiahls/linux-aarch64/mav-0.0.4-he8cfe8b_0.conda
       - conda: https://conda.modular.com/max-nightly/noarch/mblack-26.2.0-release.conda
       - conda: https://conda.modular.com/max-nightly/linux-aarch64/mojo-0.26.2.0-release.conda
       - conda: https://conda.modular.com/max-nightly/linux-aarch64/mojo-compiler-0.26.2.0-release.conda
@@ -517,6 +519,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libxml2-16-2.15.2-hca6bf5a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libxml2-2.15.2-he237659_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libzlib-1.3.2-h25fd6f3_2.conda
+      - conda: https://conda.anaconda.org/josiahls/linux-64/mav-0.0.4-hb0f4dca_0.conda
       - conda: https://conda.modular.com/max-nightly/noarch/mblack-26.2.0-release.conda
       - conda: https://conda.modular.com/max-nightly/linux-64/mojo-0.26.2.0-release.conda
       - conda: https://conda.modular.com/max-nightly/linux-64/mojo-compiler-0.26.2.0-release.conda
@@ -703,6 +706,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/libxml2-16-2.15.2-h79dcc73_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/libxml2-2.15.2-h825857f_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/libzlib-1.3.2-hdc9db2a_2.conda
+      - conda: https://conda.anaconda.org/josiahls/linux-aarch64/mav-0.0.4-he8cfe8b_0.conda
       - conda: https://conda.modular.com/max-nightly/noarch/mblack-26.2.0-release.conda
       - conda: https://conda.modular.com/max-nightly/linux-aarch64/mojo-0.26.2.0-release.conda
       - conda: https://conda.modular.com/max-nightly/linux-aarch64/mojo-compiler-0.26.2.0-release.conda
@@ -3420,6 +3424,24 @@ packages:
   license_family: Other
   size: 69833
   timestamp: 1774072605429
+- conda: https://conda.anaconda.org/josiahls/linux-64/mav-0.0.4-hb0f4dca_0.conda
+  sha256: 92ada9a9521736b345f5409c3f521cfd982418e4e6e3d8371bad3889e844a4ab
+  md5: ff744b979409c0ab0b7cccd3ff8e8015
+  depends:
+  - mojo-compiler ==0.26.2.0,<0.27
+  - ffmpeg ==8.0.1 *lgpl*
+  - ffmpeg >=8.0.1,<9.0a0
+  size: 1730206
+  timestamp: 1774492026935
+- conda: https://conda.anaconda.org/josiahls/linux-aarch64/mav-0.0.4-he8cfe8b_0.conda
+  sha256: 71057e6fbffe4800d0bd2171cc8cb72cc5f86f53de215d3fd3bd45cc0c73dd66
+  md5: c8fff9bd09d9ac641de9795c19888f73
+  depends:
+  - mojo-compiler ==0.26.2.0,<0.27
+  - ffmpeg ==8.0.1 *lgpl*
+  - ffmpeg >=8.0.1,<9.0a0
+  size: 1730207
+  timestamp: 1774492037861
 - conda: https://conda.modular.com/max-nightly/noarch/mblack-26.2.0-release.conda
   noarch: python
   sha256: 3c2fceb89cefca899dcd7c8f26a6202acacb2a073e4cb2ef365514a465d01dcd

@@ -15,16 +15,6 @@ homepage = "https://github.com/josiahls/momanim"
 repository = "https://github.com/josiahls/momanim"
 preview = ["pixi-build"]
 
-[activation.env]
-LIBRARY_PATH = "$CONDA_PREFIX/lib:$LIBRARY_PATH"
-LD_LIBRARY_PATH = "$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
-MAV_INCLUDES = " -I . -I third_party/NuMojo -I third_party/mav"
-MAV_LINKERS = " -Xlinker -lavutil -Xlinker -lavcodec -Xlinker -lswresample -Xlinker -lswscale -Xlinker -lavformat"
-MOJO_COMPILE_FLAGS = "$MAV_LINKERS $MAV_INCLUDES"
-MOJO_DEBUG_COMPILE_FLAGS = "$MOJO_COMPILE_FLAGS --debug-level=line-tables -DASSERT=all"
-MOJO_ENABLE_STACK_TRACE_ON_ERROR="1"
-LOGGING_LEVEL="DEBUG"
-
 [package]
 name = "momanim"
 version = "0.0.1"
@@ -35,25 +25,23 @@ backend = { name = "pixi-build-mojo", version = "0.1.*" }
 [package.host-dependencies]
 # Static version pin for now since Mojo nightly has high churn.
 mojo-compiler = "==0.26.2.0,<0.27"
-# ffmpeg has zlib version restrictions, thus can conflict with git.
-git = ">=2.53.0"
-openssh = ">=9.0"
+mav = "==0.0.4"
 
 [package.build-dependencies]
 # Static version pin for now since Mojo nightly has high churn.
 mojo-compiler = "==0.26.2.0,<0.27"
-
+mav = "==0.0.4"
 
 [package.run-dependencies]
 # Static version pin for now since Mojo nightly has high churn.
 mojo-compiler = "==0.26.2.0,<0.27"
+mav = "==0.0.4"
 
 [dependencies]
 # Static version pin for now since Mojo nightly has high churn.
 mojo = "==0.26.2.0,<0.27"
+mav = "==0.0.4"
 pre-commit = ">=4.5.0,<5"
-# Pin to LGPL build (no libx264/libx265) to avoid GPL copyleft
-ffmpeg = { version = "==8.0.1", build = "*lgpl*" }
 git = ">=2.53.0"
 openssh = ">=9.0"
 
@@ -68,15 +56,19 @@ use-openh264 = ["openh264"]
 extra-args = [ "$MAV_LINKERS", "$MAV_INCLUDES" ]
 
 [tasks]
+########################## Pre-commit Configuration ############################
 install_pre_commit_hooks = { cmd = [
     "pre-commit", "install"
 ], outputs = [".git/hooks/pre-commit"]}
 
-push = "git push --force-with-lease"
+conda_build = { cmd = "pixi build -o dist/" }
+conda_auth = { cmd = "pixi auth login anaconda.org  --conda-token $CONDA_TOKEN"}
+publish = { cmd = "find dist/ -name 'mav-*.conda' | xargs pixi upload anaconda --api-key $CONDA_TOKEN --owner josiahls" }
+conda_build_and_publish = [{ task = "conda_build" }, { task = "publish" }]
 
-clone_lightbug_http = "bash tools/clone_lightbug_http.sh"
-clone_numojo = "bash tools/clone_numojo.sh"
-clone_mav = "bash tools/clone_mav.sh"
+
+############################ Git Ops ###########################################
+push = "git push --force-with-lease"
 
 [tasks.rebase]
 cmd = "git rebase -i HEAD~{{ n_commits }}"
@@ -93,10 +85,10 @@ cmd = "bash tools/generate_test_videos.sh"
 
 ############################### Core API #######################################
 [tasks.configure]
-depends-on = [ "install_pre_commit_hooks", "generate_test_videos", "clone_lightbug_http", "clone_numojo", "clone_mav" ]
+depends-on = [ "install_pre_commit_hooks", "generate_test_videos" ]
 
 [tasks.package]
-cmd = "mojo package $MAV_INCLUDES momanim"
+cmd = "mojo package $MAV_INCLUDES mav"
 depends-on = [ "configure" ]
 
 [tasks.build]
@@ -116,7 +108,7 @@ cmd = "mojo build $MOJO_DEBUG_COMPILE_FLAGS --sanitize=address {{ file }} -o $(t
 args = ["file"]
 
 [tasks.format]
-cmd = "mojo format momanim"
+cmd = "mojo format mav"
 
 [tasks.valgrind]
 cmd = "valgrind --leak-check=full --track-origins=yes -s $(tools/mojo_build_ex.sh {{ file }})"

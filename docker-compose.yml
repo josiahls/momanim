@@ -17,6 +17,7 @@ x-momanim_base: &momanim_base
   environment:
     PIXI_ENVIRONMENT_NAME: ${PIXI_ENVIRONMENT_NAME:-default}
     CONFIGURE_LIBOPENH264: ${CONFIGURE_LIBOPENH264:-false}
+    CONDA_TOKEN: ${CONDA_TOKEN:-invalid}
 
 services:
   momanim_build_x86_64:
