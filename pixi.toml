@@ -48,6 +48,24 @@ openssh = ">=9.0"
 [feature.openh264.dependencies]
 openh264 = "==2.6.0"
 
+# Manim Community (Python) for reference renders / examples — use: pixi run -e manim <cmd>
+# Note: conda-forge often resolves ffmpeg *lgpl*, which has no libx264. Default output uses
+# --format webm (VP9 partial segments). For H.264/mp4, install a GPL ffmpeg build on your machine
+# or override the manim env’s ffmpeg pin (e.g. linux-64: { version = "==8.0.1", build = "*_gpl*" }).
+[feature.manim.dependencies]
+manim = ">=0.20.0"
+ffmpeg = "*"
+
+[feature.manim.tasks.render_square_to_circle]
+cmd = [
+    "manim",
+    "-ql",
+    "--format",
+    "webm",
+    "example_square_to_circle.py",
+    "SquareToCircle",
+]
+
 [activation.env]
 LIBRARY_PATH = "$CONDA_PREFIX/lib:$LIBRARY_PATH"
 LD_LIBRARY_PATH = "$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
@@ -61,6 +79,7 @@ LOGGING_LEVEL="DEBUG"
 [environments]
 default = []
 use-openh264 = ["openh264"]
+manim = ["manim"]
 
 [package.build.config]
 extra-args = [ "$MAV_LINKERS", "$MAV_INCLUDES" ]
