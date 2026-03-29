@@ -20,6 +20,7 @@ struct VideoFrame[dtype: DType = DType.uint8](Copyable, Movable, Writable):
         )
 
 
+# TODO: Video should default to RGBA_32.
 struct Video[dtype: DType = DType.uint8](Copyable, Movable, Sized, Writable):
     var _frames: List[VideoFrame[Self.dtype]]
     """Frames for videos. These are private since the user should use `frame()` which 
@@ -35,7 +36,7 @@ struct Video[dtype: DType = DType.uint8](Copyable, Movable, Sized, Writable):
     "Defines how the underlying pointer data is to be interpreted."
     var io_backend_opaque_params: Dict[String, OpaquePointer[MutExternalOrigin]]
     """Private params used by the io backend to read or write this Video."""
-    var linesize: Int
+    var linesize: Int  # TODO: Why is this Int?
     """Bytes per row (row stride). Must match the underlying buffer layout."""
 
     fn __init__(out self) raises:
@@ -46,6 +47,17 @@ struct Video[dtype: DType = DType.uint8](Copyable, Movable, Sized, Writable):
         self.color_space = ColorSpace.RGB_24
         self.io_backend_opaque_params = {}
         self.linesize = 0
+
+    fn __init__(
+        out self, w: UInt, h: UInt, ch: UInt, color_space: ColorSpace
+    ) raises:
+        self.w = w
+        self.h = h
+        self.ch = ch
+        self._frames = List[VideoFrame[Self.dtype]]()
+        self.color_space = color_space
+        self.io_backend_opaque_params = {}
+        self.linesize = Int(w * ch)
 
     fn __init__(out self, var elems: List[Scalar[Self.dtype]]) raises:
         self.w = UInt(len(elems))

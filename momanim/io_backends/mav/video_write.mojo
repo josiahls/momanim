@@ -70,7 +70,7 @@ from momanim.io_backends.mav.utils import convert_format
 
 
 comptime STREAM_FRAME_RATE = 25
-comptime STREAM_DURATION = 10.0
+comptime STREAM_DURATION: Float32 = 10.0
 comptime STREAM_PIX_FMT = AVPixelFormat.AV_PIX_FMT_YUV420P._value
 
 comptime SCALE_FLAGS = SwsFlags.SWS_BICUBIC
@@ -199,6 +199,7 @@ struct OutputStream(Copyable, Movable):
 def add_stream(
     oc: UnsafePointer[AVFormatContext, MutExternalOrigin],
     video: Video,
+    fps: UInt,
 ) raises -> OutputStream:
     var ost = OutputStream()
 
@@ -261,7 +262,7 @@ def add_stream(
         # of which frame timestamps are represented. For fixed-gps content
         # timebase should be 1/framerate and timestamp increments should be identical
         # to 1.
-        ost.st[].time_base = AVRational(num=1, den=STREAM_FRAME_RATE)
+        ost.st[].time_base = AVRational(num=1, den=c_int(fps))
         ost.enc[].time_base = ost.st[].time_base
 
         ost.enc[].gop_size = (
@@ -293,11 +294,12 @@ def add_stream(
 def get_video_frame(
     mut ost: OutputStream,
     mut video: Video[DType.uint8],
+    max_duration_seconds: Float32,
 ) raises -> UnsafePointer[AVFrame, MutExternalOrigin]:
     var comparison = avutil.av_compare_ts(
         ost.next_pts,
         ost.enc[].time_base,
-        c_long_long(Int(STREAM_DURATION)),
+        c_long_long(Int(max_duration_seconds)),
         AVRational(num=1, den=1),
     )
 
@@ -348,13 +350,14 @@ def write_frame(
     mut fmt_ctx: UnsafePointer[AVFormatContext, MutExternalOrigin],
     mut ost: OutputStream,
     mut video: Video[DType.uint8],
+    max_duration_seconds: Float32,
 ) raises -> c_int:
     var frame: UnsafePointer[AVFrame, ImmutExternalOrigin]
     if Int(ost.next_pts) >= len(video):
         # No more input frames: send NULL to flush encoder (drains buffered frames).
         frame = UnsafePointer[AVFrame, ImmutExternalOrigin]()
     else:
-        frame = get_video_frame(ost, video)
+        frame = get_video_frame(ost, video, max_duration_seconds)
 
     var ret = c_int(0)
 
@@ -384,7 +387,20 @@ def write_frame(
     return c_int(ret == Int32(AVERROR_EOF))
 
 
-def video_write(mut videos: List[Video[DType.uint8]], path: Path) raises:
+def video_write(
+    mut videos: List[Video[DType.uint8]],
+    path: Path,
+    fps: UInt = STREAM_FRAME_RATE,
+    max_duration_seconds: Float32 = STREAM_DURATION,
+) raises:
+    """Write N video streams to `path`.
+
+    Args:
+        videos: The list of videos to write.
+        path: The path to save the video to.
+        fps: The frames per second of the video.
+        max_duration_seconds: The maximum duration of the video in seconds.
+    """
     _logger.info("Saving video to path: ", path)
     # alloc_output_context expects pointer-to-pointer: it allocates a new context
     # and stores it in *ctx. Passing a raw pointer causes use-after-free.
@@ -417,7 +433,7 @@ def video_write(mut videos: List[Video[DType.uint8]], path: Path) raises:
 
     var output_streams = List[OutputStream](capacity=Int(len(videos)))
     for ref video in videos:
-        output_streams.append(add_stream(oc[], video))
+        output_streams.append(add_stream(oc[], video, fps))
         open_video(oc[], output_streams[-1], opt[])
 
     avformat.av_dump_format(oc[], 0, path_s, 1)
@@ -440,7 +456,9 @@ def video_write(mut videos: List[Video[DType.uint8]], path: Path) raises:
         ref video = videos[i]
         var do_encode_video = True
         while do_encode_video:
-            do_encode_video = write_frame(oc[], stream, video) == 0
+            do_encode_video = (
+                write_frame(oc[], stream, video, max_duration_seconds) == 0
+            )
         i += 1
 
     _check(avformat.av_write_trailer(oc[]), "Failed to write trailer: {}")
