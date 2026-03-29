@@ -10,8 +10,11 @@ struct Square:
 
     def __init__(out self, color_fill: SIMD[DType.uint8, 4]) raises:
         self.vertices = nm.zeros[DType.float32]([4, 3])
+        # self.vertices = nm.Matrix.fromstring[DType.float32](
+        #     "[[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]]", shape=(4, 3)
+        # ).to_ndarray()
         self.vertices = nm.Matrix.fromstring[DType.float32](
-            "[[-1,-1,0],[1,-1,0],[1,1,0],[-1,1,0]]", shape=(4, 3)
+            "[[-10,-10,1],[10,-10,1],[10,10,1],[-10,10,1]]", shape=(4, 3)
         ).to_ndarray()
 
         self.color_fill = color_fill
