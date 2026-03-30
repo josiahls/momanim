@@ -106,3 +106,7 @@ comptime SCALE_FACTOR_PER_FONT_POINT: Float32 = 1 / 960.0
 
 comptime DEGREES = tau / 360.0
 """The exchange rate between radians and degrees."""
+
+
+comptime CACHE_LINE_SIZE: Int = 64
+"""Modern CPUs typically use cache lines of 64 bytes."""
