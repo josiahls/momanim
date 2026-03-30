@@ -5,7 +5,7 @@ from std.os import getenv
 from std.pathlib import Path
 from std.os.path import join
 from momanim.scene.scene import Scenable
-from momanim.mobject.geometry.polygram import Square
+from momanim.mobject.polygram import Square
 from momanim.data_structs.video import Video
 from momanim.io_backends.mav.video_write import video_write
 from momanim.typing import Vector3D
@@ -14,20 +14,9 @@ import numojo as nm
 # from momanim.animation.animation import Animatable
 # from momanim.animation.creation import Create
 # from momanim.renderer.basic_renderer import BasicRenderer
-
-fn rgb(r: UInt8, g: UInt8, b: UInt8) -> SIMD[DType.uint8, 4]:
-    "Returns RGBA with alpha = 255."
-    return SIMD[DType.uint8, 4](r, g, b, 255)
+from momanim.utils.color import rgb, rgba, WHITE, BLACK, BLUE_E
 
 
-fn rgba(r: UInt8, g: UInt8, b: UInt8, a: Float32) -> SIMD[DType.uint8, 4]:
-    return SIMD[DType.uint8, 4](r, g, b, UInt8(a * 255.0))
-
-
-
-comptime WHITE = rgb(255, 255, 255)
-comptime BLACK = rgb(0, 0, 0)
-comptime BLUE_E = rgb(39, 114, 151)
 
 
 struct Point(TrivialRegisterPassable, Movable, Writable):
