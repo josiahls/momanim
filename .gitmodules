@@ -15,3 +15,9 @@
     url = git@github.com:josiahls/mav.git
     branch = main
     ignore = all
+
+[submodule "modular"]
+    path = third_party/modular
+    url = git@github.com:josiahls/modular.git
+    branch = main
+    ignore = all
