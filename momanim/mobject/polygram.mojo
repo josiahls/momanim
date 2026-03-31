@@ -3,10 +3,10 @@ import numojo as nm
 from std.math import sqrt
 
 
-comptime draw_fn = fn(delta: Float32) -> Point
+comptime draw_fn = fn(delta: Float32) capturing -> Point
 
 
-struct Point(Movable, TrivialRegisterPassable, Writable):
+struct Point(Equatable, Movable, TrivialRegisterPassable, Writable):
     comptime width = 3
     comptime dtype = DType.float32
 
@@ -27,31 +27,37 @@ struct Point(Movable, TrivialRegisterPassable, Writable):
         self.point[1] = y
         self.point[2] = 1.0
 
-    @implicit
     fn __init__(
         out self,
-        *elems: Scalar[Self.dtype],
+        elems: List[Scalar[Self.dtype]],
         __list_literal__: Tuple[] = Tuple(),
-    ) raises:
+    ):
         self.point = alloc[Scalar[Self.dtype]](3)
-        if len(elems) == 2:
-            self.point[0] = elems[0]
-            self.point[1] = elems[1]
-            self.point[2] = 1.0
-        elif len(elems) == 3:
-            self.point[0] = elems[0]
-            self.point[1] = elems[1]
-            self.point[2] = elems[2]
-        else:
-            # TODO: Not a fan of this. This should be a compile time error.
-            # however we can't know the number of elems at compile time.
-            raise Error(
-                "Invalid number of elements in the SIMD variadic constructor"
-            )
+        self.point.store(
+            SIMD[Self.dtype, Self.width](elems[0], elems[1], elems[2])
+        )
 
     fn __init__(out self, point: SIMD[Self.dtype, Self.width]):
         self.point = alloc[Scalar[Self.dtype]](3)
         self.point.store(point)
+
+    def write_to(self, mut writer: Some[Writer]):
+        writer.write("Point(", self.x(), ", ", self.y(), ", ", self.z(), ")")
+
+    def write_repr_to(self, mut writer: Some[Writer]):
+        writer.write("Point(", self.x(), ", ", self.y(), ", ", self.z(), ")")
+
+    def x(self) -> Scalar[Self.dtype]:
+        return self.point[0]
+
+    def y(self) -> Scalar[Self.dtype]:
+        return self.point[1]
+
+    def z(self) -> Scalar[Self.dtype]:
+        return self.point[2]
+
+    def __eq__(self, other: Point) -> Bool:
+        return self.load() == other.load()
 
     fn load(self) -> SIMD[Self.dtype, Self.width]:
         return self.point.load[Self.width]()
@@ -61,6 +67,9 @@ struct Point(Movable, TrivialRegisterPassable, Writable):
 
     fn __sub__(self, other: Point) -> Point:
         return Point(self.load() - other.load())
+
+    fn __mul__(self, other: Scalar[Self.dtype]) -> Point:
+        return Point(self.load() * other)
 
     fn __mul__(self, other: Point) -> Point:
         return Point(self.load() * other.load())
@@ -93,9 +102,49 @@ struct Vector(Copyable, ImplicitlyCopyable, Movable, Writable):
         self.vec = alloc[Scalar[Self.dtype]](Self.width)
         self.vec.store(p0.load().join(p1.load()))
 
+    fn __init__(
+        out self, p0: List[Scalar[Self.dtype]], p1: List[Scalar[Self.dtype]]
+    ):
+        self.vec = alloc[Scalar[Self.dtype]](Self.width)
+        if len(p0) == 2 and len(p1) == 2:
+            self.vec.store(
+                SIMD[Self.dtype, Self.width](
+                    p0[0], p0[1], 1.0, p1[0], p1[1], 1.0
+                )
+            )
+        elif len(p0) == 3 and len(p1) == 3:
+            self.vec.store(
+                SIMD[Self.dtype, Self.width](
+                    p0[0], p0[1], p0[2], p1[0], p1[1], p1[2]
+                )
+            )
+        else:
+            assert (
+                len(p0) == 3 and len(p1) == 3
+            ), "p0 and p1 must be 3 elements long"
+
+    fn __init__(out self, p0: Point, p1: List[Scalar[Self.dtype]]):
+        assert len(p1) == 3 or len(p1) == 2, "p1 must be 3 or 2 elements long"
+        self.vec = alloc[Scalar[Self.dtype]](Self.width)
+        if len(p1) == 3:
+            self.vec.store(
+                p0.load().join(SIMD[Self.dtype, 3](p1[0], p1[1], p1[2]))
+            )
+        else:
+            self.vec.store(
+                p0.load().join(SIMD[Self.dtype, 3](p1[0], p1[1], 1.0))
+            )
+
+    @implicit
     fn __init__(out self, vec: SIMD[Self.dtype, Self.width]):
         self.vec = alloc[Scalar[Self.dtype]](Self.width)
         self.vec.store(vec)
+
+    def write_to(self, mut writer: Some[Writer]):
+        writer.write("Vector(", self.p0(), ", ", self.p1(), ")")
+
+    def write_repr_to(self, mut writer: Some[Writer]):
+        writer.write("Vector: p0=", self.p0(), ", p1=", self.p1())
 
     fn load(self) -> SIMD[Self.dtype, Self.width]:
         return self.vec.load[Self.width]()
@@ -105,6 +154,9 @@ struct Vector(Copyable, ImplicitlyCopyable, Movable, Writable):
 
     fn p1(self) -> Point:
         return Point(self.load().slice[Point.width, offset=Point.width]())
+
+    fn mag(self) -> Point:
+        return self.p1() - self.p0()
 
     fn hypot(self) -> Scalar[Self.dtype]:
         return self.p0().hypot(self.p1())
@@ -151,27 +203,54 @@ struct Square:
     fn load(self) -> SIMD[Self.dtype, Self.width]:
         return self.vertices.load[Self.width]()
 
-    def v0(self) -> Vector:
-        return Vector(self.load().slice[Vector.width, offset=0]())
+    def v[i: Int](self) -> Vector:
+        return self.load().slice[Vector.width, offset=Vector.width * i]()
 
-    def v1(self) -> Vector:
-        return Vector(self.load().slice[Vector.width, offset=Vector.width]())
-
-    def v2(self) -> Vector:
-        return Vector(
-            self.load().slice[Vector.width, offset=Vector.width * 2]()
+    def draw_fn(self) -> _DrawFunction:
+        var unit_intervals = InlineArray[Float32, 4](fill=0)
+        var vectors = InlineArray[Vector, 4](uninitialized=True)
+        comptime for i in range(4):
+            vectors[i] = self.v[i]()
+            print(vectors[i])
+        var total_length = (
+            vectors[0].hypot()
+            + vectors[1].hypot()
+            + vectors[2].hypot()
+            + vectors[3].hypot()
         )
+        comptime for i in range(4):
+            unit_intervals[i] = vectors[i].hypot() / total_length
 
-    def v3(self) -> Vector:
-        return Vector(
-            self.load().slice[Vector.width, offset=Vector.width * 3]()
-        )
-
-    def compile_bezier(self):
-        pass
+        return _DrawFunction(unit_intervals^, vectors^)
 
     # def flip(self, direction: Vector3D) -> None:
     #     pass
 
     # def rotate(self, angle: Float32) -> None:
     #     pass
+
+
+trait Drawable(Movable):
+    def __call__(self, delta: Float32) -> Point:
+        ...
+
+
+@fieldwise_init
+struct _DrawFunction(Drawable):
+    var unit_intervals: InlineArray[Float32, 4]
+    var vectors: InlineArray[Vector, 4]
+
+    def __call__(self, delta: Float32) -> Point:
+        # TODO: need to figure out how to handle this.
+        # var accumulated_interval = 0.0
+        comptime for i in range(4):
+            var interval = self.unit_intervals[i]
+            # accumulated_interval
+            if delta <= interval * Float32(1 + i):
+                var v = self.vectors[i]
+                var local_delta = delta / (interval * Float32(1 + i))
+                var mag = v.mag()
+                return v.p0() + mag * local_delta
+
+        # If the above loop doesn't return, we assume we are at the last point.
+        return self.vectors[3].p1()
