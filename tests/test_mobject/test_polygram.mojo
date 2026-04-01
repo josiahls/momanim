@@ -50,13 +50,18 @@ def test_Square_init() raises:
 
 def test_Square_draw_fn() raises:
     var square = Square(color_fill=SIMD[DType.uint8, 4](255, 255, 255, 255))
-    var draw_fn = square.draw_fn()
+    var draw_fn = square.get_draw_fn()
     # Compare coordinates: Point equality is not value-based (distinct allocations).
     assert_equal(draw_fn(0.0).load(), Point(-1.0, -1.0).load())
     assert_equal(draw_fn(0.25).load(), Point(1.0, -1.0).load())
     assert_equal(draw_fn(0.5).load(), Point(1.0, 1.0).load())
     assert_equal(draw_fn(0.75).load(), Point(-1.0, 1.0).load())
     assert_equal(draw_fn(1.0).load(), Point(-1.0, -1.0).load())
+    # Interior of each edge (equal-length unit square: 0.25 per side).
+    assert_equal(draw_fn(0.125).load(), Point(0.0, -1.0).load())
+    assert_equal(draw_fn(0.375).load(), Point(1.0, 0.0).load())
+    assert_equal(draw_fn(0.625).load(), Point(0.0, 1.0).load())
+    assert_equal(draw_fn(0.875).load(), Point(-1.0, 0.0).load())
 
 
 def main() raises:
