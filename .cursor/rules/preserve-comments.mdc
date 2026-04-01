@@ -1,0 +1,15 @@
+---
+description: Do not delete or strip existing comments when editing; preserve author intent.
+alwaysApply: true
+---
+
+# Preserve existing comments
+
+When changing code (especially refactors, bug fixes, or cleanups):
+
+- **Do not remove** existing comments, `TODO`/`FIXME` notes, docstrings, section headers, or explanatory blocks unless the user explicitly asks to remove or rewrite them.
+- **Do not “tidy”** by deleting comments you judge redundant. If a comment is wrong after a change, **update** it to stay accurate; only delete it if the user asked for that or the comment is provably false and updating would be noise.
+- If you must touch a commented region for a mechanical edit (e.g. same line), **keep** the comment on that line or immediately above/below the changed code.
+- New work: avoid adding long obvious comments; this rule is about **not removing** what’s already there.
+
+This overrides a general preference to minimize comments: **preservation beats brevity** for existing commentary.
