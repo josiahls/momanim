@@ -1,0 +1,19 @@
+---
+description: Run Mojo and pixi tasks through pixi (mojo is not on bare PATH)
+alwaysApply: true
+---
+
+# Mojo and pixi in this repo
+
+The `mojo` binary lives in the **pixi** environment. A bare shell often has **no `mojo` on PATH**, so do not suggest or run `mojo ...` without pixi.
+
+**Prefer these patterns from the repo root:**
+
+| Goal | Command |
+|------|---------|
+| Run a `.mojo` file (interpreter) | `pixi run mojo run path/to/file.mojo` |
+| Build then run a binary (uses `MOJO_DEBUG_COMPILE_FLAGS`, runs `configure`) | `pixi run test path/to/file.mojo` |
+| Build only | `pixi run build path/to/file.mojo` |
+| Format | `pixi run format` |
+
+When verifying compilation or executing demos/tests, **run the command yourself** with `pixi run ...` as above, not plain `mojo`.
