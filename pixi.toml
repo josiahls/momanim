@@ -68,7 +68,6 @@ cmd = [
 
 [activation.env]
 LIBRARY_PATH = "$CONDA_PREFIX/lib:$LIBRARY_PATH"
-LD_LIBRARY_PATH = "$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 MAV_INCLUDES = " -I . -I third_party/NuMojo"
 MAV_LINKERS = " -Xlinker -lavutil -Xlinker -lavcodec -Xlinker -lswresample -Xlinker -lswscale -Xlinker -lavformat"
 MOJO_COMPILE_FLAGS = "$MAV_LINKERS $MAV_INCLUDES"
