@@ -4,7 +4,6 @@ channels = [
     "https://conda.modular.com/max-nightly", 
     "https://repo.prefix.dev/modular-community", 
     "conda-forge",
-    "josiahls"
 ]
 name = "momanim"
 platforms = ["linux-64", "linux-aarch64"]
@@ -39,14 +38,17 @@ mav = "==0.0.4"
 
 [dependencies]
 # Static version pin for now since Mojo nightly has high churn.
-mojo = "==0.26.2.0,<0.27"
-mav = "==0.0.4"
 pre-commit = ">=4.5.0,<5"
 git = ">=2.53.0"
 openssh = ">=9.0"
 
 [feature.openh264.dependencies]
 openh264 = "==2.6.0"
+
+# MAV is pinned to mojo 0.26.2.x; keep it out of `stdlib-dev` (nightly mojo-compiler).
+[feature.mav.dependencies]
+mav = "==0.0.4"
+mojo = "==0.26.2.0,<0.27"
 
 # Manim Community (Python) for reference renders / examples — use: pixi run -e manim <cmd>
 # Note: conda-forge often resolves ffmpeg *lgpl*, which has no libx264. Default output uses
@@ -76,9 +78,10 @@ MOJO_ENABLE_STACK_TRACE_ON_ERROR="1"
 LOGGING_LEVEL="DEBUG"
 
 [environments]
-default = []
-use-openh264 = ["openh264"]
+default = ["mav"]
+use-openh264 = ["openh264", "mav"]
 manim = ["manim"]
+stdlib-dev = ["stdlib-dev"]
 
 [package.build.config]
 extra-args = [ "$MAV_LINKERS", "$MAV_INCLUDES" ]
@@ -163,3 +166,30 @@ depends-on = [
 [feature.openh264.tasks.test_all]
 cmd = "mojo run run_tests.mojo"
 depends-on = [ "configure" ]
+
+
+[feature.stdlib-dev.activation.env]
+MODULAR_MOJO_MAX_IMPORT_PATH="$PIXI_PROJECT_ROOT/third_party/modular/bazel-bin"
+# MOJO_ENABLE_STACK_TRACE_ON_ERROR="1"
+
+[feature.stdlib-dev.dependencies]
+openh264 = "==2.6.0"
+mojo-compiler = "==0.26.3.0.dev2026040320,<0.27"
+
+[feature.stdlib-dev.tasks]
+update_stdlib = { cmd = [
+    "cd", "third_party/modular", "&&",
+    "./bazelw", "build", "//mojo/stdlib/std"
+]}
+
+clean_update_stdlib = { cmd = [
+    "cd", "third_party/modular", "&&",
+    "git", "switch", "main", "&&",
+    "git", "fetch", "origin", "&&",
+    "git", "reset", "--hard", "origin/main", "&&",
+    "./bazelw", "build", "//mojo/stdlib/..."
+]}
+
+test_stdlib = { cmd = [
+    "mojo", "run", "{{ file }}"
+], depends-on = [ "update_stdlib" ], args = ["file"]}
