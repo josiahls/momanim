@@ -36,7 +36,7 @@ struct SquareToCircle(Scenable):
         self.renderer = alloc[BasicRenderer[Self]](1)
         self.renderer[] = BasicRenderer[Self](
             UnsafePointer(to=self).unsafe_origin_cast[MutExternalOrigin](),
-            fps=12,
+            fps=1,
             max_duration_seconds=4,
         )
 
