@@ -155,7 +155,7 @@ struct OutputStream(Copyable, Movable):
     ]
     var swr_ctx: UnsafePointer[SwrContext, origin=MutExternalOrigin]
 
-    fn __init__(out self) raises:
+    def __init__(out self) raises:
         self.st = UnsafePointer[AVStream, MutExternalOrigin]()
         self.codec = UnsafePointer[AVCodec, MutExternalOrigin]()
         self.enc = UnsafePointer[AVCodecContext, MutExternalOrigin]()
@@ -169,7 +169,7 @@ struct OutputStream(Copyable, Movable):
         self.sws_ctx[] = sws_ctx_ptr
         self.swr_ctx = UnsafePointer[SwrContext, MutExternalOrigin]()
 
-    fn __del__(deinit self):
+    def __del__(deinit self):
         if self.frame:
             var ptr = alloc[UnsafePointer[AVFrame, MutExternalOrigin]](1)
             ptr[] = self.frame
@@ -273,6 +273,8 @@ def add_stream(
         # elif video.color_space == ColorSpace.YUV_420P:
         # TODO: Need to detect and dispatch to the correct pix_fmt for a given format.
         ost.enc[].pix_fmt = AVPixelFormat.AV_PIX_FMT_YUV420P._value
+        if ost.enc[].codec_id == AVCodecID.AV_CODEC_ID_GIF._value:
+            ost.enc[].pix_fmt = AVPixelFormat.AV_PIX_FMT_RGB8._value
         # else:
         #     raise Error("Unsupported color space: {}".format(video.color_space))
         if ost.enc[].codec_id == AVCodecID.AV_CODEC_ID_MPEG2VIDEO._value:
@@ -315,11 +317,14 @@ def get_video_frame(
 
     var frame_ptr = video.unsafe_ptr(Int(frame_idx))
 
-    if video.color_space != ColorSpace.YUV_420P:
-        if video.color_space == ColorSpace.RGBA_32:
-            ost.conversion_frame[].format = AVPixelFormat.AV_PIX_FMT_RGBA._value
-        else:
-            raise Error("Unsupported color space: {}".format(video.color_space))
+    if video.color_space == ColorSpace.RGBA_32:
+        ost.conversion_frame[].format = AVPixelFormat.AV_PIX_FMT_RGBA._value
+    elif video.color_space == ColorSpace.RGB_8:
+        ost.conversion_frame[].format = AVPixelFormat.AV_PIX_FMT_RGB8._value
+    else:
+        raise Error("Unsupported color space: {}".format(video.color_space))
+
+    if ost.conversion_frame[].format != ost.enc[].pix_fmt:
         ret = avutil.av_frame_make_writable(ost.conversion_frame)
         _check(ret, "Failed to make tmp frame writable: {}")
         ost.conversion_frame[].data[0] = frame_ptr.copy()
@@ -332,7 +337,7 @@ def get_video_frame(
             sws_ctx=ost.sws_ctx,
             enc=ost.enc,
             src_format=ost.conversion_frame[].format,
-            dst_format=AVPixelFormat.AV_PIX_FMT_YUV420P._value,
+            dst_format=ost.enc[].pix_fmt,
         )
     else:
         ost.frame[].data[0] = frame_ptr.copy()

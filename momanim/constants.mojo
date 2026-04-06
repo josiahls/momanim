@@ -25,12 +25,15 @@ struct ColorSpace(Enumable):
     Defualt in ffmpeg (at least their examples)
     - https://ffmpeg.org//doxygen/trunk/pixfmt_8h.html#a9a8e335cf3be472042bc9f0cf80cd4c5
     """
+    comptime RGB_8 = Self(4)
+    """Packed RGB 8:8:8, 24bpp, RGBRGB...
+    """
 
     @implicit
-    fn __init__(out self, value: Self.dtype):
+    def __init__(out self, value: Self.dtype):
         self.value = value
 
-    fn __init__(out self, enum: Self):
+    def __init__(out self, enum: Self):
         self.value = enum.value
 
 

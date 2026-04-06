@@ -3,7 +3,7 @@ from momanim.scene.scene import Scenable
 from momanim.camera.camera import Camera
 from std.pathlib import Path
 from momanim.constants import ColorSpace
-from momanim.mobject.polygram import Square, Point, MObject
+from momanim.mobject.polygram import Square, Point, MObject, Style
 from momanim.mobject.bezier_curve import (
     QuadBezierCurve,
     farin_rational_de_casteljau,
@@ -81,12 +81,22 @@ struct BasicRenderer[T: Scenable](Movable):
             pixel_num += 1
 
         var row_stride = camera.pixel_width * channels
+        # TODO: We probably just want to dispatch on MObject types. e.g.:
+        # vecotirzed is a special type, but there could be others such as groups,
+        # vgroups, etc.
         # TODO: Ideally we also vectorize this. Its possible we need a nicer way
         # of handling this via primitives.
         for i in range(obj.n_curves()):
             var curve = obj.get_curve(i)
+            # Draw really should probably be a dumb kernel.
             Self.draw[M.CoordDType](
-                curve, center_origin, new_frame, camera, row_stride, channels
+                curve,
+                center_origin,
+                new_frame,
+                camera,
+                row_stride,
+                channels,
+                obj.get_style(),
             )
 
         var frame_ptr = alloc[
@@ -109,8 +119,11 @@ struct BasicRenderer[T: Scenable](Movable):
         camera: Camera,
         row_stride: UInt,
         channels: Int,
+        style: Style,
     ) raises:
+        print("Drawing color: ", style.color_edges)
         var granularity: Float32 = 0.01
+        var previous_point: Point[curve_dtype] = Point[curve_dtype](0.0, 0.0)
         for t in range(0, Int(1 / granularity)):
             # TODO: Verify, can `farin_rational_de_casteljau` be used as a gpu kernel?
             var p0 = (
@@ -119,6 +132,7 @@ struct BasicRenderer[T: Scenable](Movable):
             )
             var x = Int(round(p0.coords[0]))
             var y = Int(round(p0.coords[1]))
+            previous_point = p0
             # TODO: Ideally we want to be able to do this in GPU, however
             # these if statements are not great for Warps (divergence).
             if (
@@ -129,10 +143,9 @@ struct BasicRenderer[T: Scenable](Movable):
             ):
                 continue
 
-            var offset = y * row_stride
-            for ch in range(channels):
-                var channel_stride = x * channels
-                (new_frame + offset + channel_stride + ch).store(val=BLACK[ch])
+            var offset = y * Int(row_stride)  # y = 100, row 0
+            var channel_stride = x * channels  # x = 0
+            (new_frame + offset + channel_stride).store(val=style.color_edges)
 
     def play(mut self, mut animation: Some[Animatable]) raises -> None:
         # TODO: Eventually support multi camera rendering

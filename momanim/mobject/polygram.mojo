@@ -34,6 +34,16 @@ trait MObject(Copyable, Writable):
     def get_curve(self, index: Int) -> QuadBezierCurve[Self.CoordDType]:
         ...
 
+    def get_style(self) -> Style:
+        ...
+
+
+@fieldwise_init
+struct Style(Copyable, Writable):
+    var kernel_size: Int
+    var color_fill: SIMD[DType.uint8, 4]
+    var color_edges: SIMD[DType.uint8, 4]
+
 
 struct Square[dtype: DType = DType.float32](MObject):
     comptime CoordDType = Self.dtype
@@ -43,6 +53,7 @@ struct Square[dtype: DType = DType.float32](MObject):
     # var colors: nm.NDArray[DType.uint8]
     var color_fill: SIMD[DType.uint8, 4]
     var color_edges: SIMD[DType.uint8, 4]
+    var kernel_size: Int
 
     def __init__(
         out self,
@@ -87,6 +98,7 @@ struct Square[dtype: DType = DType.float32](MObject):
 
         self.color_fill = color_fill
         self.color_edges = color_edges
+        self.kernel_size = 3
 
     def __init__(
         out self,
@@ -101,12 +113,20 @@ struct Square[dtype: DType = DType.float32](MObject):
         self.curves = [curve1, curve2, curve3, curve4]
         self.color_fill = color_fill
         self.color_edges = color_edges
+        self.kernel_size = 3
 
     def n_curves(self) -> Int:
         return len(self.curves)
 
     def get_curve(self, index: Int) -> QuadBezierCurve[Self.CoordDType]:
         return self.curves[index]
+
+    def get_style(self) -> Style:
+        return Style(
+            kernel_size=self.kernel_size,
+            color_fill=self.color_fill,
+            color_edges=self.color_edges,
+        )
 
     def pointwise_become_partial(
         mut self,
