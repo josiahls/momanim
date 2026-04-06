@@ -10,7 +10,33 @@ from momanim.mobject.bezier_curve import (
 )
 
 
-struct Square[dtype: DType = DType.float32](Copyable, Writable):
+trait MObject(Copyable, Writable):
+    """Coordinate / curve floating-point element type (e.g. ``Square``'s ``dtype``).
+
+    Used so ``get_curve`` can return ``QuadBezierCurve[Self.CoordDType]`` without a
+    generic parameter: callers through ``Some[MObject]`` cannot infer a
+    ``[curve_dtype: DType]`` argument.
+    """
+
+    comptime CoordDType: DType
+
+    def pointwise_become_partial(
+        mut self,
+        vmobject: Self,
+        a: Float32,
+        b: Float32,
+    ) -> Self:
+        ...
+
+    def n_curves(self) -> Int:
+        ...
+
+    def get_curve(self, index: Int) -> QuadBezierCurve[Self.CoordDType]:
+        ...
+
+
+struct Square[dtype: DType = DType.float32](MObject):
+    comptime CoordDType = Self.dtype
     comptime width = 4
     var curves: List[QuadBezierCurve[Self.dtype]]
     # var alphas: nm.NDArray[DType.float32]
@@ -59,7 +85,6 @@ struct Square[dtype: DType = DType.float32](Copyable, Writable):
             ),
         ]
 
-        # self.vertices.store((v0.join(v1)).join(v2.join(v3)))
         self.color_fill = color_fill
         self.color_edges = color_edges
 
@@ -77,8 +102,11 @@ struct Square[dtype: DType = DType.float32](Copyable, Writable):
         self.color_fill = color_fill
         self.color_edges = color_edges
 
-    def curve[i: Int](self) -> QuadBezierCurve[Self.dtype]:
-        return self.curves[i]
+    def n_curves(self) -> Int:
+        return len(self.curves)
+
+    def get_curve(self, index: Int) -> QuadBezierCurve[Self.CoordDType]:
+        return self.curves[index]
 
     def pointwise_become_partial(
         mut self,
