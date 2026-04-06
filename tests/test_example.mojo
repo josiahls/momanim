@@ -32,7 +32,7 @@ struct SquareToCircle(Scenable):
         # self.camera = Camera(480, 864)
         # TODO: I wonder if camera should just to passed directly to renderer.
         self.camera = Camera(240, 432)
-        self._background_color = WHITE
+        self._background_color = BLACK
         self.renderer = alloc[BasicRenderer[Self]](1)
         self.renderer[] = BasicRenderer[Self](
             UnsafePointer(to=self).unsafe_origin_cast[MutExternalOrigin](),
@@ -85,11 +85,9 @@ struct SquareToCircle(Scenable):
 def test_SquareToCircle() raises:
     var scene = SquareToCircle()
     var test_data_root = getenv("PIXI_PROJECT_ROOT")
-    var root_path = join(
-        test_data_root,
-        "test_data/test_example/test_SquareToCircle.webm",
-    )
-    scene.render(root_path)
+    # scene.render(Path(join(test_data_root, "test_data/test_example/test_SquareToCircle.webm")))
+    # scene.render(Path(join(test_data_root, "test_data/test_example/test_SquareToCircle.mp4")))
+    scene.render(Path(join(test_data_root, "test_data/test_example/test_SquareToCircle.gif")))
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

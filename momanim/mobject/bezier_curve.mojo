@@ -119,6 +119,8 @@ def farin_rational_de_casteljau_split[
     # TODO: Is a copy the only way to handle this?
     var p_i_n = quad_bezier_curve.points.copy()
     # size = number of control points = n + 1 (degree n).
+    # TODO: Could be use:
+    # https://docs.modular.com/mojo/std/math/polynomial/polynomial_evaluate/ ?
     comptime for r in range(1, size):
         comptime for i in range(size - r):
             if i == 0:
