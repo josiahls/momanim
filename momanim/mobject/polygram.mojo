@@ -2,210 +2,17 @@ from momanim.typing import Vector3D
 import numojo as nm
 from std.math import sqrt
 from momanim.utils.color import WHITE
+from momanim.mobject.bezier_curve import (
+    QuadBezierCurve,
+    Point,
+    integer_interpolate,
+    farin_rational_de_casteljau_between,
+)
 
 
-# trait Drawable(Movable):
-#     """A Drawable is a object that can produce a `Point` from a floating scalar.
-
-#     Conforming types implement `__call__(self, delta: Float32) -> Point`.
-
-#     Delta is expected to range in [0, 1]. 0 should be the start of the path,
-#     and 1 should be the end of the path.
-#     """
-#     def __call__(self, delta: Float32) -> Point: ...
-
-# @fieldwise_init
-# struct PolygramDrawFn(Drawable):
-#     # TODO: We should just make this a polygram draw function e.g.:
-#     # number of vectors and unit intervals should be flexible.
-#     var unit_intervals: InlineArray[Float32, 4]
-#     var vectors: InlineArray[Vector, 4]
-#     var total_length: Float32
-
-#     def __call__(self, delta: Float32) -> Point:
-#         assert delta >= 0, "Delta must be >= 0 not: {}".format(delta)
-#         assert delta <= 1, "Delta must be <= 1 not: {}".format(delta)
-#         # `unit_intervals[i]` is arc-length fraction for segment i; map global
-#         # delta in [0, 1] to a parameter t in [0, 1] along that segment only.
-#         var segment_start: Float32 = 0.0
-#         comptime for i in range(4):
-#             var interval = self.unit_intervals[i]
-#             var segment_end = segment_start + interval
-#             if delta <= segment_end:
-#                 var v = self.vectors[i]
-#                 var t = (delta - segment_start) / interval
-#                 var mag = v.mag()
-#                 return v.p0() + mag * t
-#             segment_start = segment_end
-
-#         return self.vectors[3].p1()
-
-
-# struct Point(Equatable, Movable, TrivialRegisterPassable, Writable):
-#     comptime width = 3
-#     comptime dtype = DType.float32
-
-#     var point: UnsafePointer[Scalar[Self.dtype], MutExternalOrigin]
-
-#     fn __init__(
-#         out self,
-#         x: Scalar[Self.dtype],
-#         y: Scalar[Self.dtype],
-#         z: Scalar[Self.dtype],
-#     ):
-#         self.point = alloc[Scalar[Self.dtype]](3)
-#         self.point.store(SIMD[Self.dtype, Self.width](x, y, z))
-
-#     fn __init__(out self, x: Scalar[Self.dtype], y: Scalar[Self.dtype]):
-#         self.point = alloc[Scalar[Self.dtype]](3)
-#         self.point[0] = x
-#         self.point[1] = y
-#         self.point[2] = 1.0
-
-#     fn __init__(
-#         out self,
-#         elems: List[Scalar[Self.dtype]],
-#         __list_literal__: Tuple[] = Tuple(),
-#     ):
-#         self.point = alloc[Scalar[Self.dtype]](3)
-#         self.point.store(
-#             SIMD[Self.dtype, Self.width](elems[0], elems[1], elems[2])
-#         )
-
-#     fn __init__(out self, point: SIMD[Self.dtype, Self.width]):
-#         self.point = alloc[Scalar[Self.dtype]](3)
-#         self.point.store(point)
-
-#     def write_to(self, mut writer: Some[Writer]):
-#         writer.write("Point(", self.x(), ", ", self.y(), ", ", self.z(), ")")
-
-#     def write_repr_to(self, mut writer: Some[Writer]):
-#         writer.write("Point(", self.x(), ", ", self.y(), ", ", self.z(), ")")
-
-#     def x(self) -> Scalar[Self.dtype]:
-#         return self.point[0]
-
-#     def y(self) -> Scalar[Self.dtype]:
-#         return self.point[1]
-
-#     def z(self) -> Scalar[Self.dtype]:
-#         return self.point[2]
-
-#     def __eq__(self, other: Point) -> Bool:
-#         return self.load() == other.load()
-
-#     fn load(self) -> SIMD[Self.dtype, Self.width]:
-#         return self.point.load[Self.width]()
-
-#     fn __add__(self, other: Point) -> Point:
-#         return Point(self.load() + other.load())
-
-#     fn __sub__(self, other: Point) -> Point:
-#         return Point(self.load() - other.load())
-
-#     fn __mul__(self, other: Scalar[Self.dtype]) -> Point:
-#         return Point(self.load() * other)
-
-#     fn __mul__(self, other: Point) -> Point:
-#         return Point(self.load() * other.load())
-
-#     fn __truediv__(self, other: Point) -> Point:
-#         return Point(self.load() / other.load())
-
-#     fn __matmul__(self, other: Point) -> Scalar[Self.dtype]:
-#         return (self * other).load().reduce_add()
-
-#     fn __pow__(self, other: Int) -> Point:
-#         return Point(self.load() ** other)
-
-#     fn hypot(self, other: Point) -> Scalar[Self.dtype]:
-#         """Calculates the Euclidean distance between two points.
-
-#         See: https://en.wikipedia.org/wiki/Euclidean_distance
-#         """
-#         var diff = self - other
-#         return sqrt((diff**2).load().reduce_add())
-
-
-# struct Vector(Copyable, ImplicitlyCopyable, Movable, Writable):
-#     comptime width = Point.width * 2
-#     comptime dtype = DType.float32
-
-#     var vec: UnsafePointer[Scalar[Self.dtype], MutExternalOrigin]
-
-#     fn __init__(out self, p0: Point, p1: Point):
-#         self.vec = alloc[Scalar[Self.dtype]](Self.width)
-#         self.vec.store(p0.load().join(p1.load()))
-
-#     fn __init__(
-#         out self, p0: List[Scalar[Self.dtype]], p1: List[Scalar[Self.dtype]]
-#     ):
-#         self.vec = alloc[Scalar[Self.dtype]](Self.width)
-#         if len(p0) == 2 and len(p1) == 2:
-#             self.vec.store(
-#                 SIMD[Self.dtype, Self.width](
-#                     p0[0], p0[1], 1.0, p1[0], p1[1], 1.0
-#                 )
-#             )
-#         elif len(p0) == 3 and len(p1) == 3:
-#             self.vec.store(
-#                 SIMD[Self.dtype, Self.width](
-#                     p0[0], p0[1], p0[2], p1[0], p1[1], p1[2]
-#                 )
-#             )
-#         else:
-#             assert (
-#                 len(p0) == 3 and len(p1) == 3
-#             ), "p0 and p1 must be 3 elements long"
-
-#     fn __init__(out self, p0: Point, p1: List[Scalar[Self.dtype]]):
-#         assert len(p1) == 3 or len(p1) == 2, "p1 must be 3 or 2 elements long"
-#         self.vec = alloc[Scalar[Self.dtype]](Self.width)
-#         if len(p1) == 3:
-#             self.vec.store(
-#                 p0.load().join(SIMD[Self.dtype, 3](p1[0], p1[1], p1[2]))
-#             )
-#         else:
-#             self.vec.store(
-#                 p0.load().join(SIMD[Self.dtype, 3](p1[0], p1[1], 1.0))
-#             )
-
-#     @implicit
-#     fn __init__(out self, vec: SIMD[Self.dtype, Self.width]):
-#         self.vec = alloc[Scalar[Self.dtype]](Self.width)
-#         self.vec.store(vec)
-
-#     def write_to(self, mut writer: Some[Writer]):
-#         writer.write("Vector(", self.p0(), ", ", self.p1(), ")")
-
-#     def write_repr_to(self, mut writer: Some[Writer]):
-#         writer.write("Vector: p0=", self.p0(), ", p1=", self.p1())
-
-#     fn load(self) -> SIMD[Self.dtype, Self.width]:
-#         return self.vec.load[Self.width]()
-
-#     fn p0(self) -> Point:
-#         return Point(self.load().slice[Point.width, offset=0]())
-
-#     fn p1(self) -> Point:
-#         return Point(self.load().slice[Point.width, offset=Point.width]())
-
-#     fn mag(self) -> Point:
-#         return self.p1() - self.p0()
-
-#     fn hypot(self) -> Scalar[Self.dtype]:
-#         return self.p0().hypot(self.p1())
-
-#     fn join(self, other: Vector) -> SIMD[Self.dtype, Self.width * 2]:
-#         "Returns a joined SIMD vector of the two vectors."
-#         return self.load().join(other.load())
-
-
-struct Square:
-    comptime width = Vector.width * 4
-    comptime dtype = DType.float32
-
-    var vertices: UnsafePointer[Scalar[Self.dtype], MutExternalOrigin]
+struct Square[dtype: DType = DType.float32](Copyable, Writable):
+    comptime width = 4
+    var curves: List[QuadBezierCurve[Self.dtype]]
     # var alphas: nm.NDArray[DType.float32]
     # var colors: nm.NDArray[DType.uint8]
     var color_fill: SIMD[DType.uint8, 4]
@@ -217,55 +24,169 @@ struct Square:
         color_fill: SIMD[DType.uint8, 4],
         color_edges: SIMD[DType.uint8, 4] = WHITE,
     ) raises:
-        self.vertices = alloc[Scalar[Self.dtype]](Self.width)
-        var v0 = Vector([-1.0, -1.0], [1.0, -1.0])
-        var v1 = Vector(v0.p1(), [1.0, 1.0])
-        var v2 = Vector(v1.p1(), [-1.0, 1.0])
-        var v3 = Vector(v2.p1(), [-1.0, -1.0])
-        for i, v in enumerate([v0, v1, v2, v3]):
-            self.vertices.store(val=v.load(), offset=Vector.width * i)
+        self.curves = [
+            QuadBezierCurve[Self.dtype](
+                Point[Self.dtype](
+                    Scalar[Self.dtype](-1.0), Scalar[Self.dtype](0.0)
+                ),
+                Point[Self.dtype](
+                    Scalar[Self.dtype](0.0), Scalar[Self.dtype](1.0)
+                ),
+            ),
+            QuadBezierCurve[Self.dtype](
+                Point[Self.dtype](
+                    Scalar[Self.dtype](0.0), Scalar[Self.dtype](1.0)
+                ),
+                Point[Self.dtype](
+                    Scalar[Self.dtype](1.0), Scalar[Self.dtype](0.0)
+                ),
+            ),
+            QuadBezierCurve[Self.dtype](
+                Point[Self.dtype](
+                    Scalar[Self.dtype](1.0), Scalar[Self.dtype](0.0)
+                ),
+                Point[Self.dtype](
+                    Scalar[Self.dtype](0.0), Scalar[Self.dtype](-1.0)
+                ),
+            ),
+            QuadBezierCurve[Self.dtype](
+                Point[Self.dtype](
+                    Scalar[Self.dtype](0.0), Scalar[Self.dtype](-1.0)
+                ),
+                Point[Self.dtype](
+                    Scalar[Self.dtype](-1.0), Scalar[Self.dtype](0.0)
+                ),
+            ),
+        ]
+
         # self.vertices.store((v0.join(v1)).join(v2.join(v3)))
         self.color_fill = color_fill
         self.color_edges = color_edges
 
     def __init__(
         out self,
-        v0: Vector,
-        v1: Vector,
-        v2: Vector,
-        v3: Vector,
+        curve1: QuadBezierCurve[Self.dtype],
+        curve2: QuadBezierCurve[Self.dtype],
+        curve3: QuadBezierCurve[Self.dtype],
+        curve4: QuadBezierCurve[Self.dtype],
         *,
         color_fill: SIMD[DType.uint8, 4],
         color_edges: SIMD[DType.uint8, 4] = WHITE,
     ) raises:
-        self.vertices = alloc[Scalar[Self.dtype]](Self.width)
-        for i, v in enumerate([v0, v1, v2, v3]):
-            self.vertices.store(val=v.load(), offset=Vector.width * i)
+        self.curves = [curve1, curve2, curve3, curve4]
         self.color_fill = color_fill
         self.color_edges = color_edges
 
-    fn load(self) -> SIMD[Self.dtype, Self.width]:
-        return self.vertices.load[Self.width]()
+    def curve[i: Int](self) -> QuadBezierCurve[Self.dtype]:
+        return self.curves[i]
 
-    def v[i: Int](self) -> Vector:
-        return self.load().slice[Vector.width, offset=Vector.width * i]()
+    def pointwise_become_partial(
+        mut self,
+        vmobject: Self,
+        a: Float32,
+        b: Float32,
+    ) -> Self:
+        """Given a 2nd :class:`.VMobject` ``vmobject``, a lower bound ``a`` and
+        an upper bound ``b``, modify this :class:`.VMobject`'s points to
+        match the portion of the Bézier spline described by ``vmobject.points``
+        with the parameter ``t`` between ``a`` and ``b``.
 
-    def get_draw_fn(self) -> Self.draw_fn:
-        var unit_intervals = InlineArray[Float32, 4](fill=0)
-        var vectors = InlineArray[Vector, 4](uninitialized=True)
-        comptime for i in range(4):
-            vectors[i] = self.v[i]()
-            print(vectors[i])
-        var total_length = (
-            vectors[0].hypot()
-            + vectors[1].hypot()
-            + vectors[2].hypot()
-            + vectors[3].hypot()
-        )
-        comptime for i in range(4):
-            unit_intervals[i] = vectors[i].hypot() / total_length
+        Parameters
+        ----------
+        vmobject
+            The :class:`.VMobject` that will serve as a model.
+        a
+            The lower bound for ``t``.
+        b
+            The upper bound for ``t``
 
-        return Self.draw_fn(unit_intervals^, vectors^, total_length)
+        Returns
+        -------
+        :class:`.VMobject`
+            The :class:`.VMobject` itself, after the transformation.
+
+        Raises
+        ------
+        TypeError
+            If ``vmobject`` is not an instance of :class:`VMobject`.
+        """
+        # Partial curve includes three portions:
+        # - A middle section, which matches the curve exactly.
+        # - A start, which is some ending portion of an inner cubic.
+        # - An end, which is the starting portion of a later inner cubic.
+        if a <= 0 and b >= 1:
+            self.curves = (
+                vmobject.curves.copy()
+            )  # TODO: This is not optimal, fix this
+            return self.copy()  # TODO: This is not optimal, fix this
+        var num_curves = len(vmobject.curves)
+        if num_curves == 0:
+            return self.copy()  # TODO: This is not optimal, fix this
+
+        # The following two lines will compute which Bézier curves of the given Mobject must be processed.
+        # The residue indicates the proportion of the selected Bézier curve which must be selected.
+        #
+        # Example: if num_curves is 10, a is 0.34 and b is 0.78, then:
+        # - lower_index is 3 and lower_residue is 0.4, which means the algorithm will look at the 3rd Bézier
+        #   and select its part which ranges from t=0.4 to t=1.
+        # - upper_index is 7 and upper_residue is 0.8, which means the algorithm will look at the 7th Bézier
+        #   and select its part which ranges from t=0 to t=0.8.
+        var lower_index, lower_residue = integer_interpolate(0, num_curves, a)
+        var upper_index, upper_residue = integer_interpolate(0, num_curves, b)
+
+        var nppc = Int(QuadBezierCurve.size)
+
+        # Copy vmobject.points if vmobject is self to prevent unintended in-place modification
+        var vmobject_points = vmobject.curves.copy()
+
+        # If both indices coincide, get a part of a single Bézier curve.
+        if lower_index == upper_index:
+            # print('lower_index == upper_index and a: ', a, ' b: ', b, 'lower_index: ', lower_index, 'lower_residue: ', lower_residue, 'upper_residue: ', upper_residue)
+            # Look at the "lower_index"-th Bézier curve and select its part from
+            # t=lower_residue to t=upper_residue.
+            self.curves = List[QuadBezierCurve[Self.dtype]](capacity=1)
+            # print('vmobject_points[lower_index]: ', vmobject_points[lower_index])
+            # vmobject_points[nppc * lower_index : nppc * (lower_index + 1)],
+            self.curves.append(
+                farin_rational_de_casteljau_between(
+                    vmobject_points[lower_index],
+                    lower_residue,
+                    upper_residue,
+                )
+            )
+        else:
+            # Allocate space for (upper_index-lower_index+1) Bézier curves.
+            # print('\tupper_index - lower_index + 1: ', upper_index - lower_index + 1, ' lower_index: ', lower_index, ' upper_index: ', upper_index, 'lower_residue: ', lower_residue, 'upper_residue: ', upper_residue)
+            var n_new_curves = Int((upper_index - lower_index + 1))
+            self.curves = List[QuadBezierCurve[Self.dtype]](
+                capacity=n_new_curves
+            )
+            # Look at the "lower_index"-th Bezier curve and select its part from
+            # t=lower_residue to t=1. This is the first curve in self.points.
+            # print('\tfirst_curve: ', vmobject_points[lower_index])
+            var first_curve = farin_rational_de_casteljau_between(
+                # vmobject_points[nppc * lower_index : nppc * (lower_index + 1)],
+                vmobject_points[lower_index],
+                lower_residue,
+                1,
+            )
+            self.curves.append(first_curve)
+            # If there are more curves between the "lower_index"-th and the
+            # "upper_index"-th Béziers, add them all to self.points.
+            var between_curves = vmobject_points[
+                (lower_index + 1) : upper_index
+            ]
+            self.curves.extend(between_curves)
+            # Look at the "upper_index"-th Bézier curve and select its part from
+            # t=0 to t=upper_residue. This is the last curve in self.points.
+            var last_curve = farin_rational_de_casteljau_between(
+                vmobject_points[upper_index],
+                0,
+                upper_residue,
+            )
+            self.curves.append(last_curve)
+
+        return self.copy()  # TODO: This is not optimal, fix this
 
     # def flip(self, direction: Vector3D) -> None:
     #     pass
