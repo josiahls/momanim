@@ -17,8 +17,9 @@ import numojo as nm
 # from momanim.animation.animation import Animatable
 # from momanim.animation.creation import Create
 # from momanim.renderer.basic_renderer import BasicRenderer
-from momanim.utils.color import rgb, rgba, WHITE, BLACK, BLUE_E
 
+from momanim.utils.color import rgb, rgba, WHITE, BLACK, BLUE_E
+from momanim.mobject.bezier_curve import QuadBezierCurve, Point
 
 
 
@@ -35,7 +36,7 @@ struct SquareToCircle(Scenable):
         self.renderer = alloc[BasicRenderer[Self]](1)
         self.renderer[] = BasicRenderer[Self](
             UnsafePointer(to=self).unsafe_origin_cast[MutExternalOrigin](),
-            fps=1,
+            fps=12,
             max_duration_seconds=4,
         )
 
@@ -51,10 +52,21 @@ struct SquareToCircle(Scenable):
     def construct(mut self) raises:
         # circle = Circle()
         var square = Square(
-            v0=Vector([-10.0,  0.0, 1.0], [0.0, -10.0, 1.0]),
-            v1=Vector([0.0, -10.0, 1.0], [10.0, 0.0, 1.0]),
-            v2=Vector([10.0,  0.0, 1.0], [0.0,  10.0, 1.0]),
-            v3=Vector([0.0,  10.0, 1.0], [-10.0,  0.0, 1.0]),
+            QuadBezierCurve(
+                Point(Float32(-1.0), Float32(0.0)) * 10,
+                Point(Float32(0.0), Float32(-1.0)) * 10,
+            ),
+            QuadBezierCurve(
+                Point(Float32(0.0), Float32(-1.0)) * 10,  
+                Point(Float32(1.0), Float32(0.0)) * 10,
+            ),
+            QuadBezierCurve(
+                Point(Float32(1.0), Float32(0.0)) * 10,  
+                Point(Float32(0.0), Float32(1.0)) * 10),
+            QuadBezierCurve(
+                Point(Float32(0.0), Float32(1.0)) * 10, 
+                Point(Float32(-1.0), Float32(0.0)) * 10,
+            ),
             color_fill=BLACK
         )
         # square.flip(RIGHT)

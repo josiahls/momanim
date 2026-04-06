@@ -1,7 +1,10 @@
+# TODO: We might need to parameterize this to either 2 or 4 dimensions if we continue
+# to use SIMD.
 struct Point[dtype: DType = DType.float32](
     Copyable, Equatable, Movable, TrivialRegisterPassable, Writable
 ):
-    var coords: SIMD[Self.dtype, 3]
+    comptime SIMDType = SIMD[Self.dtype, 4]
+    var coords: Self.SIMDType
 
     def __init__(
         out self,
@@ -9,12 +12,14 @@ struct Point[dtype: DType = DType.float32](
         y: Scalar[Self.dtype],
         z: Scalar[Self.dtype],
     ):
-        self.coords = SIMD[Self.dtype, 3](x, y, z)
+        self.coords = Self.SIMDType(x, y, z, 1.0)
 
     def __init__(out self, x: Scalar[Self.dtype], y: Scalar[Self.dtype]):
-        self.coords = SIMD[Self.dtype, 3](x, y, 1.0)
+        self.coords = Self.SIMDType(
+            x, y, Scalar[Self.dtype](1.0), Scalar[Self.dtype](1.0)
+        )
 
-    def __init__(out self, simd: SIMD[Self.dtype, 3]):
+    def __init__(out self, simd: Self.SIMDType):
         self.coords = simd
 
     def __sub__(self, other: Self) -> Self:
@@ -33,12 +38,16 @@ struct Point[dtype: DType = DType.float32](
         return Self(self.coords * other)
 
 
-struct QuadBezierCurve[size: Int = 4, dtype: DType = DType.float32](Copyable):
+struct QuadBezierCurve[dtype: DType = DType.float32](
+    Copyable, ImplicitlyCopyable, Writable
+):
     """A quadratic bezier curve defined by a start point, 2 control points,
     and an end point.
     """
 
+    comptime size = 4
     comptime Point = Point[Self.dtype]
+
     var points: InlineArray[Self.Point, Self.size]
 
     def __init__(
@@ -61,10 +70,8 @@ struct QuadBezierCurve[size: Int = 4, dtype: DType = DType.float32](Copyable):
 
 
 def farin_rational_de_casteljau[
-    dtype: DType, size: Int, //
-](quad_bezier_curve: QuadBezierCurve[size, dtype], t: Scalar[dtype]) -> Point[
-    dtype
-]:
+    dtype: DType, //
+](quad_bezier_curve: QuadBezierCurve[dtype], t: Float32) -> Point[dtype]:
     """Calculates the point along a Bezier Curve.
 
     See: https://en.wikipedia.org/wiki/De_Casteljau's_algorithm
@@ -73,23 +80,25 @@ def farin_rational_de_casteljau[
     # TODO: Is a copy the only way to handle this?
     var p_i_n = quad_bezier_curve.points.copy()
     # size = number of control points = n + 1 (degree n).
-    comptime n = size - 1
+    comptime n = QuadBezierCurve.size - 1
 
     # TODO: Note the Farin part of the  algorithm includes `weights`. We don't
     # add that for now, will want to probably later.
 
     # De Casteljau: for each r = 1,…,n, compute P_i^r for i = 0,…,n−r (not 0,…,n).
-    comptime for r in range(1, size):
-        comptime for i in range(size - r):
-            p_i_n[i] = p_i_n[i] * (1 - t) + p_i_n[i + 1] * t
+    comptime for r in range(1, QuadBezierCurve.size):
+        comptime for i in range(QuadBezierCurve.size - r):
+            p_i_n[i] = p_i_n[i] * (1 - Scalar[dtype](t)) + p_i_n[
+                i + 1
+            ] * Scalar[dtype](t)
 
     return p_i_n[0]  # P_0^n
 
 
 def farin_rational_de_casteljau_split[
-    dtype: DType, size: Int, //
-](quad_bezier_curve: QuadBezierCurve[size, dtype], t: Scalar[dtype]) -> Tuple[
-    QuadBezierCurve[size, dtype], QuadBezierCurve[size, dtype]
+    dtype: DType, //
+](quad_bezier_curve: QuadBezierCurve[dtype], t: Float32) -> Tuple[
+    QuadBezierCurve[dtype], QuadBezierCurve[dtype]
 ]:
     """Split at `t`: first curve is [0, t], second is [t, 1] in parameter.
 
@@ -102,6 +111,8 @@ def farin_rational_de_casteljau_split[
     See: https://en.wikipedia.org/wiki/De_Casteljau's_algorithm
     See: https://drna.padovauniversitypress.it/system/files/papers/DRNA-2024-3-09.pdf
     """
+    comptime size = QuadBezierCurve.size
+    comptime output_dtype = Scalar[dtype]
     var left = InlineArray[Point[dtype], size](uninitialized=True)
     var right = InlineArray[Point[dtype], size](uninitialized=True)
     var split_index = 0
@@ -114,7 +125,9 @@ def farin_rational_de_casteljau_split[
                 left[split_index] = p_i_n[i]
             if i == size - r - 1:
                 right[size - split_index - 1] = p_i_n[i + 1]
-            p_i_n[i] = p_i_n[i] * (1 - t) + p_i_n[i + 1] * t
+            p_i_n[i] = p_i_n[i] * (1 - output_dtype(t)) + p_i_n[
+                i + 1
+            ] * output_dtype(t)
         split_index += 1
 
     left[split_index] = p_i_n[0]
@@ -124,53 +137,82 @@ def farin_rational_de_casteljau_split[
 
 
 def farin_rational_de_casteljau_between[
-    dtype: DType, size: Int, //, _use_left: Bool = False
+    dtype: DType, //
 ](
-    quad_bezier_curve: QuadBezierCurve[size, dtype],
-    a: Scalar[dtype],
-    b: Scalar[dtype],
-) -> QuadBezierCurve[size, dtype]:
-    # TODO: Is a copy the only way to handle this?
+    quad_bezier_curve: QuadBezierCurve[dtype],
+    a: Float32,
+    b: Float32,
+) -> QuadBezierCurve[dtype]:
+    """Subcurve with the same geometry as the original on parameter interval [a, b].
+
+    Same idea as Manim ``partial_bezier_points``: split at ``a`` and keep the right
+    piece (maps [a, 1] → [0, 1]), then split that at u = (b - a) / (1 - a) and keep
+    the left piece (maps [a, b] → [0, 1]).
+    """
+    comptime size = quad_bezier_curve.size
     var p_i_n = quad_bezier_curve.points.copy()
 
-    # TODO: We should be able to unify these funcitons tbh, and clean up
-    # the parameterization.
-
-    # Handle edge cases.
     if a == 1:
-        comptime for i in range(size):
-            p_i_n[i] = p_i_n[0]
-        return QuadBezierCurve(p_i_n)
-    if b == 0:
         comptime for i in range(size):
             p_i_n[i] = p_i_n[size - 1]
         return QuadBezierCurve(p_i_n)
+    if b == 0:
+        comptime for i in range(size):
+            p_i_n[i] = p_i_n[0]
+        return QuadBezierCurve(p_i_n)
+    if a == 0 and b == 1:
+        return quad_bezier_curve
 
-    var out = InlineArray[Point[dtype], size](uninitialized=True)
-    var t: Scalar[dtype] = a
-    var split_index = 0
-    # size = number of control points = n + 1 (degree n).
-    comptime for r in range(1, size):
-        comptime for i in range(size - r):
-            comptime if _use_left:
-                if i == 0:
-                    out[split_index] = p_i_n[i]
+    var tail = quad_bezier_curve
+    if a != 0:
+        tail = farin_rational_de_casteljau_split(quad_bezier_curve, a)[1]
+    var u = (b - a) / (1 - a)
+    return farin_rational_de_casteljau_split(tail, u)[0]
 
-            comptime if not _use_left:
-                if i == size - r - 1:
-                    out[size - split_index - 1] = p_i_n[i + 1]
-            p_i_n[i] = p_i_n[i] * (1 - t) + p_i_n[i + 1] * t
-        split_index += 1
 
-    comptime if _use_left:
-        out[split_index] = p_i_n[0]
-    else:
-        out[size - split_index - 1] = p_i_n[0]
+def integer_interpolate(
+    start: Float32,
+    end: Float32,
+    alpha: Float32,
+) -> Tuple[Int, Float32]:
+    """This is a variant of interpolate that returns an integer and the residual.
 
-    comptime if _use_left:
-        return QuadBezierCurve(out)
-    else:
-        # var residue = 1 - a
-        return farin_rational_de_casteljau_between[_use_left=True](
-            quad_bezier_curve=QuadBezierCurve(out), a=(b - a) / (1 - a), b=1
-        )
+    Parameters
+    ----------
+    start
+        The start of the range
+    end
+        The end of the range
+    alpha
+        a float between 0 and 1.
+
+    Returns
+    -------
+    tuple[int, float]
+        This returns an integer between start and end (inclusive) representing
+        appropriate interpolation between them, along with a
+        "residue" representing a new proportion between the
+        returned integer and the next one of the
+        list.
+
+    See: https://github.com/ManimCommunity/manim/blob/21cf9998cc7ad34cdc5cb2fae09aa500d88d86c2/manim/utils/bezier.py#L1067
+    """
+    if alpha >= 1:
+        return (Int(end - 1), 1.0)
+    if alpha <= 0:
+        return (Int(start), 0)
+    value = Int(interpolate(start, end, alpha))
+    residue = ((end - start) * alpha) % 1
+    return (value, residue)
+
+
+def interpolate(
+    start: Float32,
+    end: Float32,
+    alpha: Float32,
+) -> Float32:
+    """Linearly interpolates between two values ``start`` and ``end``.
+
+    See: https://github.com/ManimCommunity/manim/blob/21cf9998cc7ad34cdc5cb2fae09aa500d88d86c2/manim/utils/bezier.py#L1032
+    """
+    return (1 - alpha) * start + alpha * end
