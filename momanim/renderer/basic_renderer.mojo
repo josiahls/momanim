@@ -3,7 +3,7 @@ from momanim.scene.scene import Scenable
 from momanim.camera.camera import Camera
 from std.pathlib import Path
 from momanim.constants import ColorSpace
-from momanim.mobject.polygram import Square, Point
+from momanim.mobject.polygram import Square, Point, MObject
 from momanim.mobject.bezier_curve import (
     QuadBezierCurve,
     farin_rational_de_casteljau,
@@ -53,20 +53,20 @@ struct BasicRenderer[T: Scenable](Movable):
         )
 
     @staticmethod
-    def render_frame(
-        mut video: Video[DType.uint8],
-        mut scene: Self.T,
-        draw_actions: List[QuadBezierCurve[DType.float32]],
-    ) raises:
+    def render_frame[
+        M: MObject
+    ](mut video: Video[DType.uint8], mut scene: Self.T, mut obj: M,) raises:
         ref camera = scene.cameras()[0]
         var channels = len(scene.background_color())
         var new_frame = Self.frame_from_camera(camera, channels)
         var n_elems = (
             Int(camera.pixel_height) * Int(camera.pixel_width) * channels
         )
-        var center_origin = Point(
-            x=Float32(camera.pixel_width / 2),
-            y=Float32(camera.pixel_height / 2),
+        # `M.CoordDType` only exists when `obj` is a concrete `MObject`, not
+        # `Some[MObject]` (trait objects erase comptime associated types).
+        var center_origin = Point[M.CoordDType](
+            x=Scalar[M.CoordDType](Float64(camera.pixel_width) / 2.0),
+            y=Scalar[M.CoordDType](Float64(camera.pixel_height) / 2.0),
         )
 
         # TODO: Would be nice to vectorize this. We need to maintain max CACHE_LINE_SIZE
@@ -83,9 +83,10 @@ struct BasicRenderer[T: Scenable](Movable):
         var row_stride = camera.pixel_width * channels
         # TODO: Ideally we also vectorize this. Its possible we need a nicer way
         # of handling this via primitives.
-        for action in draw_actions:
-            Self.draw(
-                action, center_origin, new_frame, camera, row_stride, channels
+        for i in range(obj.n_curves()):
+            var curve = obj.get_curve(i)
+            Self.draw[M.CoordDType](
+                curve, center_origin, new_frame, camera, row_stride, channels
             )
 
         var frame_ptr = alloc[
@@ -99,18 +100,19 @@ struct BasicRenderer[T: Scenable](Movable):
         frame_ptr.free()
 
     @staticmethod
-    def draw(
-        curve: QuadBezierCurve[DType.float32],
-        center_origin: Point[DType.float32],
+    def draw[
+        curve_dtype: DType
+    ](
+        curve: QuadBezierCurve[curve_dtype],
+        center_origin: Point[curve_dtype],
         mut new_frame: UnsafePointer[Scalar[DType.uint8], MutExternalOrigin],
         camera: Camera,
         row_stride: UInt,
         channels: Int,
     ) raises:
-        # for i, point in enumerate(curve.points):
-        #     var p0 = point + center_origin
         var granularity: Float32 = 0.01
         for t in range(0, Int(1 / granularity)):
+            # TODO: Verify, can `farin_rational_de_casteljau` be used as a gpu kernel?
             var p0 = (
                 farin_rational_de_casteljau(curve, t * granularity)
                 + center_origin
