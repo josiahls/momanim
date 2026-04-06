@@ -21,3 +21,9 @@
     url = git@github.com:josiahls/modular.git
     branch = main
     ignore = all
+
+[submodule "manim"]
+    path = third_party/manim
+    url =git@github.com:ManimCommunity/manim.git
+    branch = main
+    ignore = all
