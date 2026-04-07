@@ -12,6 +12,103 @@ from momanim.utils.color import BLACK
 from momanim.io_backends.mav.video_write import video_write
 from momanim.animation.creation import Create
 from momanim.animation.animation import Animatable
+from std.math import e, pi, sqrt
+
+
+def pdf(z: Float32) -> Float32:
+    var a: Float32 = (-(z**2)) / 2
+    var nom: Float32 = Float32(e) ** a
+    return nom / (sqrt(2 * Float32(pi)))
+
+
+def standardize(z: Float32, mean: Float32, std: Float32) -> Float32:
+    return (z - mean) / std
+
+
+# TODO: make this comptime
+struct GuassianBlurKernel[size: Int = 3, channels: Int = 4](RegisterPassable):
+    var kernel: UnsafePointer[Float32, MutExternalOrigin]
+
+    def __init__(out self):
+        self.kernel = alloc[Float32](Self.size * Self.size * Self.channels)
+        comptime std = Float32(sqrt(1.0))
+        comptime std_scale = 1 / std
+        comptime mean: Float32 = Float32(Self.size / 2)
+
+        comptime max_pdf = std_scale * pdf(standardize(mean, mean, std))
+
+        comptime for i in range(Self.size):  # Row
+            comptime for j in range(Self.size):  # Col
+                comptime i_offset = standardize(Float32(i), mean, std)
+                comptime j_offset = standardize(Float32(j), mean, std)
+
+                comptime iw = std_scale * pdf(i_offset)
+                comptime jw = std_scale * pdf(j_offset)
+                comptime w = ((iw + jw) / 2) / max_pdf
+
+                self.kernel.store(val=w, offset=i * Self.size + j)
+
+    def store[
+        width: Int
+    ](
+        self,
+        x: Int,
+        y: Int,
+        value: SIMD[DType.uint8, width],
+        mut ptr: UnsafePointer[Scalar[DType.uint8], MutExternalOrigin],
+        row_stride: Int,
+    ) raises:
+        """
+        Store a value at a given position in the kernel.
+
+        Args:
+            x: The x position to store the value at.
+            y: The y position to store the value at.
+            value: Assumed to be a RGBA value.
+        """
+        comptime std = Float32(sqrt(1.0))
+        comptime std_scale = 1 / std
+        comptime mean: Float32 = Float32(Self.size / 2)
+        print("drawing: ", x, "y: ", y)
+        comptime for i in range(Self.size):  # Row
+            comptime for j in range(Self.size):  # Col
+                comptime i_offset = standardize(Float32(i), mean, std)
+                comptime j_offset = standardize(Float32(j), mean, std)
+
+                var w = self.kernel[i * Self.size + j]
+                # print('i: ', i, 'j: ', j, 'i_offset: ', i_offset, 'j_offset: ', j_offset, 'w', w)
+
+                var row_offset = (y + Int(i_offset)) * row_stride
+                var col_offset = (x + Int(j_offset)) * width
+
+                var weighted_value = value.cast[Float32.dtype]() * w
+                var adjusted_color = SIMD[DType.float32, 4](
+                    weighted_value[0],
+                    weighted_value[1],
+                    weighted_value[2],
+                    # NOTE: Do not adjust alpha for now
+                    value.cast[Float32.dtype]()[3],
+                )
+                print(
+                    "i_offset: ",
+                    row_offset,
+                    "col_offset: ",
+                    col_offset,
+                    "i_offset: ",
+                    i_offset,
+                    "j_offset: ",
+                    j_offset,
+                    "w: ",
+                    w,
+                    "adjusted_color: ",
+                    adjusted_color,
+                )
+                # print('adjusted_color: ', adjusted_color)
+
+                ptr.store(
+                    val=adjusted_color.cast[DType.uint8](),
+                    offset=row_offset + col_offset,
+                )
 
 
 struct BasicRenderer[T: Scenable](Movable):
@@ -124,6 +221,7 @@ struct BasicRenderer[T: Scenable](Movable):
         print("Drawing color: ", style.color_edges)
         var granularity: Float32 = 0.01
         var previous_point: Point[curve_dtype] = Point[curve_dtype](0.0, 0.0)
+        var kernel = GuassianBlurKernel[style.kernel_size]()
         for t in range(0, Int(1 / granularity)):
             # TODO: Verify, can `farin_rational_de_casteljau` be used as a gpu kernel?
             var p0 = (
@@ -143,9 +241,20 @@ struct BasicRenderer[T: Scenable](Movable):
             ):
                 continue
 
-            var offset = y * Int(row_stride)  # y = 100, row 0
-            var channel_stride = x * channels  # x = 0
-            (new_frame + offset + channel_stride).store(val=style.color_edges)
+            # var offset = y * Int(row_stride)
+            # var channel_stride = x * channels
+            # new_frame.store(
+            #     val=style.color_edges,
+            #     offset=offset + channel_stride
+            # )
+            kernel.store(x, y, style.color_edges, new_frame, Int(row_stride))
+
+            # NOTE: Educational note: This takes color_edges SIMD[width=4] and
+            # spreads it over 4 offsets,every 30 uint8s.
+            # (new_frame + offset + channel_stride).strided_store(
+            #     val=style.color_edges,
+            #     stride=30
+            # )
 
     def play(mut self, mut animation: Some[Animatable]) raises -> None:
         # TODO: Eventually support multi camera rendering

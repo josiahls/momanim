@@ -40,7 +40,7 @@ trait MObject(Copyable, Writable):
 
 @fieldwise_init
 struct Style(Copyable, Writable):
-    var kernel_size: Int
+    comptime kernel_size: Int = 3
     var color_fill: SIMD[DType.uint8, 4]
     var color_edges: SIMD[DType.uint8, 4]
 
@@ -53,7 +53,6 @@ struct Square[dtype: DType = DType.float32](MObject):
     # var colors: nm.NDArray[DType.uint8]
     var color_fill: SIMD[DType.uint8, 4]
     var color_edges: SIMD[DType.uint8, 4]
-    var kernel_size: Int
 
     def __init__(
         out self,
@@ -98,7 +97,6 @@ struct Square[dtype: DType = DType.float32](MObject):
 
         self.color_fill = color_fill
         self.color_edges = color_edges
-        self.kernel_size = 3
 
     def __init__(
         out self,
@@ -113,7 +111,6 @@ struct Square[dtype: DType = DType.float32](MObject):
         self.curves = [curve1, curve2, curve3, curve4]
         self.color_fill = color_fill
         self.color_edges = color_edges
-        self.kernel_size = 3
 
     def n_curves(self) -> Int:
         return len(self.curves)
@@ -123,7 +120,6 @@ struct Square[dtype: DType = DType.float32](MObject):
 
     def get_style(self) -> Style:
         return Style(
-            kernel_size=self.kernel_size,
             color_fill=self.color_fill,
             color_edges=self.color_edges,
         )
