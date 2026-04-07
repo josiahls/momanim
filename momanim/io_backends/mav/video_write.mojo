@@ -273,6 +273,12 @@ def add_stream(
         # elif video.color_space == ColorSpace.YUV_420P:
         # TODO: Need to detect and dispatch to the correct pix_fmt for a given format.
         ost.enc[].pix_fmt = AVPixelFormat.AV_PIX_FMT_YUV420P._value
+        # GIF muxer: encoder accepts rgb8/bgr8/pal8/gray/… — not rgb24.
+        # AV_PIX_FMT_RGB8 (libavutil) is packed 3:3:2 — one byte per pixel total, not 8 bits per channel.
+        # Our frames are RGBA (4 bytes/pixel); swscale fills a separate dst AVFrame with its own
+        # linesize[0] (bytes per row for that format). Smaller bpp ⇒ smaller row stride in bytes,
+        # not a shifted grid — unless code wrongly treats dst memory as RGBA layout.
+        # 8-bit indexed / palette concepts: https://en.wikipedia.org/wiki/Indexed_color
         if ost.enc[].codec_id == AVCodecID.AV_CODEC_ID_GIF._value:
             ost.enc[].pix_fmt = AVPixelFormat.AV_PIX_FMT_RGB8._value
         # else:

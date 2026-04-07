@@ -1,4 +1,4 @@
-from mav.ffmpeg.swscale.swscale import SwsContext
+from mav.ffmpeg.swscale.swscale import SwsContext, SwsDither
 from std.ffi import c_uchar, c_int, c_double
 from mav.ffmpeg import avutil
 from mav.ffmpeg.avutil.pixfmt import AVPixelFormat
@@ -51,6 +51,9 @@ def convert_format(
         )
         if not sws_ctx[]:
             raise Error("Failed to initialize conversion context")
+        # RGB8 (e.g. GIF): libswscale may dither when packing to 3:3:2; match CLI `-sws_dither none`.
+        if dst_format == AVPixelFormat.AV_PIX_FMT_RGB8._value:
+            sws_ctx[][].dither = SwsDither.SWS_DITHER_NONE.value
 
     # TODO: Get the number of planes, should be able to do `len(src_frame[].data)`
     var src_slice = alloc[UnsafePointer[c_uchar, ImmutExternalOrigin]](8)
