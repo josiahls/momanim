@@ -13,9 +13,11 @@ struct Create[T: MObject, origin: Origin](Animatable):
     var _current_frame: UInt
     var _total_frames: UInt
 
-    def __init__(out self, ref[Self.origin] obj: Self.T) raises:
+    def __init__(
+        out self, ref[Self.origin] obj: Self.T, run_time: Float32 = 4.0
+    ) raises:
         self.starting_obj = Pointer[mut=False](to=obj)
-        self.run_time = 4
+        self.run_time = run_time
         self._current_frame = 0
         self._total_frames = 0
 

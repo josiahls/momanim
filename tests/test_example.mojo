@@ -29,14 +29,14 @@ struct SquareToCircle(Scenable):
     var renderer: UnsafePointer[BasicRenderer[Self], MutExternalOrigin]
 
     def __init__(out self) raises:
-        # self.camera = Camera(480, 864)
+        self.camera = Camera(480, 864)
         # TODO: I wonder if camera should just to passed directly to renderer.
-        self.camera = Camera(240, 432)
+        # self.camera = Camera(240, 432)
         self._background_color = BLACK
         self.renderer = alloc[BasicRenderer[Self]](1)
         self.renderer[] = BasicRenderer[Self](
             UnsafePointer(to=self).unsafe_origin_cast[MutExternalOrigin](),
-            fps=1,
+            fps=12,
             max_duration_seconds=4,
         )
 
@@ -53,19 +53,19 @@ struct SquareToCircle(Scenable):
         # circle = Circle()
         var square = Square(
             QuadBezierCurve(
-                Point(Float32(-1.0), Float32(0.0)) * 10,
-                Point(Float32(0.0), Float32(-1.0)) * 10,
+                Point(Float32(-1.0), Float32(0.0)) * 100,
+                Point(Float32(0.0), Float32(-1.0)) * 100,
             ),
             QuadBezierCurve(
-                Point(Float32(0.0), Float32(-1.0)) * 10,  
-                Point(Float32(1.0), Float32(0.0)) * 10,
+                Point(Float32(0.0), Float32(-1.0)) * 100,  
+                Point(Float32(1.0), Float32(0.0)) * 100,
             ),
             QuadBezierCurve(
-                Point(Float32(1.0), Float32(0.0)) * 10,  
-                Point(Float32(0.0), Float32(1.0)) * 10),
+                Point(Float32(1.0), Float32(0.0)) * 100,  
+                Point(Float32(0.0), Float32(1.0)) * 100),
             QuadBezierCurve(
-                Point(Float32(0.0), Float32(1.0)) * 10, 
-                Point(Float32(-1.0), Float32(0.0)) * 10,
+                Point(Float32(0.0), Float32(1.0)) * 100, 
+                Point(Float32(-1.0), Float32(0.0)) * 100,
             ),
             color_fill=BLACK
         )
@@ -73,7 +73,7 @@ struct SquareToCircle(Scenable):
         # square.rotate(-3 * tau / 8)
         # circle.set_fill(PINK, opacity=0.5)
 
-        self.play(Create(square))
+        self.play(Create(square, run_time=2.0))
         # self.play(Transform(square, circle))
         # self.play(FadeOut(square))
 

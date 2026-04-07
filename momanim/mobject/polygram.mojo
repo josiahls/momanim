@@ -40,9 +40,10 @@ trait MObject(Copyable, Writable):
 
 @fieldwise_init
 struct Style(Copyable, Writable):
-    comptime kernel_size: Int = 3
+    comptime kernel_size: Int = 5
     var color_fill: SIMD[DType.uint8, 4]
     var color_edges: SIMD[DType.uint8, 4]
+    var continuous: Bool
 
 
 struct Square[dtype: DType = DType.float32](MObject):
@@ -122,6 +123,7 @@ struct Square[dtype: DType = DType.float32](MObject):
         return Style(
             color_fill=self.color_fill,
             color_edges=self.color_edges,
+            continuous=True,
         )
 
     def pointwise_become_partial(

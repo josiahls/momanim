@@ -26,7 +26,7 @@ def standardize(z: Float32, mean: Float32, std: Float32) -> Float32:
 
 
 # TODO: make this comptime
-struct GuassianBlurKernel[size: Int = 3, channels: Int = 4](RegisterPassable):
+struct PaintKernel[size: Int = 3, channels: Int = 4](RegisterPassable):
     var kernel: UnsafePointer[Float32, MutExternalOrigin]
 
     def __init__(out self):
@@ -69,44 +69,22 @@ struct GuassianBlurKernel[size: Int = 3, channels: Int = 4](RegisterPassable):
         comptime std = Float32(sqrt(1.0))
         comptime std_scale = 1 / std
         comptime mean: Float32 = Float32(Self.size / 2)
-        print("drawing: ", x, "y: ", y)
+
         comptime for i in range(Self.size):  # Row
             comptime for j in range(Self.size):  # Col
                 comptime i_offset = standardize(Float32(i), mean, std)
                 comptime j_offset = standardize(Float32(j), mean, std)
 
-                var w = self.kernel[i * Self.size + j]
-                # print('i: ', i, 'j: ', j, 'i_offset: ', i_offset, 'j_offset: ', j_offset, 'w', w)
+                # TODO Need to do a more proper
+
+                # var w = self.kernel[i * Self.size + j]
 
                 var row_offset = (y + Int(i_offset)) * row_stride
                 var col_offset = (x + Int(j_offset)) * width
-
-                var weighted_value = value.cast[Float32.dtype]() * w
-                var adjusted_color = SIMD[DType.float32, 4](
-                    weighted_value[0],
-                    weighted_value[1],
-                    weighted_value[2],
-                    # NOTE: Do not adjust alpha for now
-                    value.cast[Float32.dtype]()[3],
-                )
-                print(
-                    "i_offset: ",
-                    row_offset,
-                    "col_offset: ",
-                    col_offset,
-                    "i_offset: ",
-                    i_offset,
-                    "j_offset: ",
-                    j_offset,
-                    "w: ",
-                    w,
-                    "adjusted_color: ",
-                    adjusted_color,
-                )
-                # print('adjusted_color: ', adjusted_color)
+                var weighted_value = value.cast[Float32.dtype]()  # * w
 
                 ptr.store(
-                    val=adjusted_color.cast[DType.uint8](),
+                    val=weighted_value.cast[DType.uint8](),
                     offset=row_offset + col_offset,
                 )
 
@@ -185,15 +163,17 @@ struct BasicRenderer[T: Scenable](Movable):
         # of handling this via primitives.
         for i in range(obj.n_curves()):
             var curve = obj.get_curve(i)
+            ref style = obj.get_style()
             # Draw really should probably be a dumb kernel.
             Self.draw[M.CoordDType](
+                i,
                 curve,
                 center_origin,
                 new_frame,
                 camera,
                 row_stride,
                 channels,
-                obj.get_style(),
+                style,
             )
 
         var frame_ptr = alloc[
@@ -210,6 +190,7 @@ struct BasicRenderer[T: Scenable](Movable):
     def draw[
         curve_dtype: DType
     ](
+        curve_idx: Int,
         curve: QuadBezierCurve[curve_dtype],
         center_origin: Point[curve_dtype],
         mut new_frame: UnsafePointer[Scalar[DType.uint8], MutExternalOrigin],
@@ -220,8 +201,11 @@ struct BasicRenderer[T: Scenable](Movable):
     ) raises:
         print("Drawing color: ", style.color_edges)
         var granularity: Float32 = 0.01
-        var previous_point: Point[curve_dtype] = Point[curve_dtype](0.0, 0.0)
-        var kernel = GuassianBlurKernel[style.kernel_size]()
+        var previous_point: Optional[Point[curve_dtype]] = None
+        var kernel = PaintKernel[style.kernel_size]()
+
+        var prev_x: Int = -1
+        var prev_y: Int = -1
         for t in range(0, Int(1 / granularity)):
             # TODO: Verify, can `farin_rational_de_casteljau` be used as a gpu kernel?
             var p0 = (
@@ -230,7 +214,6 @@ struct BasicRenderer[T: Scenable](Movable):
             )
             var x = Int(round(p0.coords[0]))
             var y = Int(round(p0.coords[1]))
-            previous_point = p0
             # TODO: Ideally we want to be able to do this in GPU, however
             # these if statements are not great for Warps (divergence).
             if (
@@ -241,20 +224,7 @@ struct BasicRenderer[T: Scenable](Movable):
             ):
                 continue
 
-            # var offset = y * Int(row_stride)
-            # var channel_stride = x * channels
-            # new_frame.store(
-            #     val=style.color_edges,
-            #     offset=offset + channel_stride
-            # )
             kernel.store(x, y, style.color_edges, new_frame, Int(row_stride))
-
-            # NOTE: Educational note: This takes color_edges SIMD[width=4] and
-            # spreads it over 4 offsets,every 30 uint8s.
-            # (new_frame + offset + channel_stride).strided_store(
-            #     val=style.color_edges,
-            #     stride=30
-            # )
 
     def play(mut self, mut animation: Some[Animatable]) raises -> None:
         # TODO: Eventually support multi camera rendering
