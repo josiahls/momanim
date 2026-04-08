@@ -32,17 +32,12 @@ struct Create[T: MObject, origin: Origin](Animatable):
                 self._total_frames
             )
 
-        # var total_pixels = Int(L * max_delta) + 1
-        # var draw_actions = List[QuadBezierCurve[DType.float32]](capacity=3)
-
         var copy_obj = self.starting_obj[].copy()
         copy_obj = copy_obj.pointwise_become_partial(
             self.starting_obj[],
             a=0,
             b=max_delta,
         )
-        # for curve in copy_obj.curves:
-        #     draw_actions.append(curve)
 
         self._current_frame += 1
         return copy_obj^

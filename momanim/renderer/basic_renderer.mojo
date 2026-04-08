@@ -199,7 +199,6 @@ struct BasicRenderer[T: Scenable](Movable):
         channels: Int,
         style: Style,
     ) raises:
-        print("Drawing color: ", style.color_edges)
         var granularity: Float32 = 0.01
         var previous_point: Optional[Point[curve_dtype]] = None
         var kernel = PaintKernel[style.kernel_size]()
