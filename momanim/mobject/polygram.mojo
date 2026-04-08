@@ -1,6 +1,6 @@
 from momanim.typing import Vector3D
 import numojo as nm
-from std.math import sqrt
+from std.math import sqrt, tan, pi
 from momanim.utils.color import WHITE
 from momanim.mobject.bezier_curve import (
     QuadBezierCurve,
@@ -236,8 +236,6 @@ struct Square[dtype: DType = DType.float32](MObject):
     def get_curve(self, index: Int) -> QuadBezierCurve[Self.CoordDType]:
         return self.curves[index]
 
-    # def get_curves(mut self) -> ref[self] List[QuadBezierCurve[Self.CoordDType]]:
-
     def get_curves[
         o: Origin
     ](ref[o] self) -> ref[o] List[QuadBezierCurve[Self.CoordDType]]:
@@ -265,3 +263,137 @@ struct Square[dtype: DType = DType.float32](MObject):
 
     # def rotate(self, angle: Float32) -> None:
     #     pass
+
+
+struct Circle[dtype: DType = DType.float32](MObject):
+    comptime CoordDType = Self.dtype
+    var curves: List[QuadBezierCurve[Self.CoordDType]]
+    var style: Style
+
+    def __init__(
+        out self,
+        *,
+        color_fill: SIMD[DType.uint8, 4],
+        color_edges: SIMD[DType.uint8, 4] = WHITE,
+    ) raises:
+        # Cubic Bézier approximation of a unit circle.
+        # kappa = 4/3 * tan(pi/8) ~= 0.5522847498
+        comptime kappa = Scalar[Self.dtype](
+            4.0 / 3.0 * tan(pi / 8)
+        )  # Scalar[Self.dtype](0.5522847498)
+        self.curves = [
+            QuadBezierCurve[Self.dtype](
+                Point[Self.dtype](
+                    Scalar[Self.dtype](-1.0), Scalar[Self.dtype](0.0)
+                ),
+                Point[Self.dtype](Scalar[Self.dtype](-1.0), kappa),
+                Point[Self.dtype](-kappa, Scalar[Self.dtype](1.0)),
+                Point[Self.dtype](
+                    Scalar[Self.dtype](0.0), Scalar[Self.dtype](1.0)
+                ),
+            ),
+            QuadBezierCurve[Self.dtype](
+                Point[Self.dtype](
+                    Scalar[Self.dtype](0.0), Scalar[Self.dtype](1.0)
+                ),
+                Point[Self.dtype](kappa, Scalar[Self.dtype](1.0)),
+                Point[Self.dtype](Scalar[Self.dtype](1.0), kappa),
+                Point[Self.dtype](
+                    Scalar[Self.dtype](1.0), Scalar[Self.dtype](0.0)
+                ),
+            ),
+            QuadBezierCurve[Self.dtype](
+                Point[Self.dtype](
+                    Scalar[Self.dtype](1.0), Scalar[Self.dtype](0.0)
+                ),
+                Point[Self.dtype](Scalar[Self.dtype](1.0), -kappa),
+                Point[Self.dtype](kappa, Scalar[Self.dtype](-1.0)),
+                Point[Self.dtype](
+                    Scalar[Self.dtype](0.0), Scalar[Self.dtype](-1.0)
+                ),
+            ),
+            QuadBezierCurve[Self.dtype](
+                Point[Self.dtype](
+                    Scalar[Self.dtype](0.0), Scalar[Self.dtype](-1.0)
+                ),
+                Point[Self.dtype](-kappa, Scalar[Self.dtype](-1.0)),
+                Point[Self.dtype](Scalar[Self.dtype](-1.0), -kappa),
+                Point[Self.dtype](
+                    Scalar[Self.dtype](-1.0), Scalar[Self.dtype](0.0)
+                ),
+            ),
+        ]
+
+        self.style = Style(
+            color_fill=color_fill,
+            color_edges=color_edges,
+            continuous=True,
+        )
+
+    def n_curves(self) -> Int:
+        return len(self.curves)
+
+    def scale(mut self, factor: Scalar[Self.CoordDType]) -> None:
+        for ref curve in self.curves:
+            curve *= factor
+
+    def get_curve(self, index: Int) -> QuadBezierCurve[Self.CoordDType]:
+        return self.curves[index]
+
+    def get_curves[
+        o: Origin
+    ](ref[o] self) -> ref[o] List[QuadBezierCurve[Self.CoordDType]]:
+        return UnsafePointer(to=self.curves).unsafe_origin_cast[
+            origin_of(self)
+        ]()[]
+
+    def copy_curves(self) -> List[QuadBezierCurve[Self.CoordDType]]:
+        return self.curves.copy()
+
+    def set_curves(
+        mut self, var curves: List[QuadBezierCurve[Self.CoordDType]]
+    ) -> None:
+        self.curves = curves^
+
+    def get_style(self) -> Style:
+        return self.style.copy()  # TODO: Turn into a reference
+
+
+struct MorphingVMObject[dtype: DType = DType.float32](MObject):
+    comptime CoordDType = Self.dtype
+    var curves: List[QuadBezierCurve[Self.CoordDType]]
+    var style: Style
+
+    def __init__(
+        out self,
+        *,
+        var curves: List[QuadBezierCurve[Self.CoordDType]],
+        # TODO: Style should just be a pointer
+        var style: Style,
+    ) raises:
+        self.curves = curves^
+        self.style = style^
+
+    def n_curves(self) -> Int:
+        return len(self.curves)
+
+    def get_curve(self, index: Int) -> QuadBezierCurve[Self.CoordDType]:
+        return self.curves[index]
+
+    def get_curves[
+        o: Origin
+    ](ref[o] self) -> ref[o] List[QuadBezierCurve[Self.CoordDType]]:
+        return UnsafePointer(to=self.curves).unsafe_origin_cast[
+            origin_of(self)
+        ]()[]
+
+    def copy_curves(self) -> List[QuadBezierCurve[Self.CoordDType]]:
+        return self.curves.copy()
+
+    def set_curves(
+        mut self, var curves: List[QuadBezierCurve[Self.CoordDType]]
+    ) -> None:
+        self.curves = curves^
+
+    def get_style(self) -> Style:
+        return self.style.copy()  # TODO: Turn into a reference
