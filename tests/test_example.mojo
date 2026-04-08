@@ -12,8 +12,10 @@ from momanim.scene.scene import Scenable
 from momanim.typing import Vector3D
 from std.utils.variant import Variant
 from momanim.renderer.basic_renderer import BasicRenderer, Create
+from momanim.animation.transform import Transform
 from momanim.camera.camera import Camera
 import numojo as nm
+from momanim.animation.animation import Animatable
 # from momanim.animation.animation import Animatable
 # from momanim.animation.creation import Create
 # from momanim.renderer.basic_renderer import BasicRenderer
@@ -36,11 +38,11 @@ struct SquareToCircle(Scenable):
         self.renderer = alloc[BasicRenderer[Self]](1)
         self.renderer[] = BasicRenderer[Self](
             UnsafePointer(to=self).unsafe_origin_cast[MutExternalOrigin](),
-            fps=1,
+            fps=12,
             max_duration_seconds=4,
         )
 
-    def play(mut self, var animation: Create) raises -> None:
+    def play[T: Animatable](mut self, var animation: T) raises -> None:
         self.renderer[].play(animation)
 
     def cameras(self) -> List[Camera]:
@@ -74,9 +76,9 @@ struct SquareToCircle(Scenable):
         # square.rotate(-3 * tau / 8)
         # circle.set_fill(PINK, opacity=0.5)
 
-        # self.play(Create(square, run_time=2.0))
-        self.play(Create(circle, run_time=4.0))
-        # self.play(Transform(square, circle))
+        self.play(Create(square, run_time=2.0))
+        # self.play(Create(circle, run_time=2.0))
+        self.play(Transform(square, circle))
         # self.play(FadeOut(square))
 
     def render(mut self, path: Path) raises -> None:

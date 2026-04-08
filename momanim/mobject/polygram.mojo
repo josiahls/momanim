@@ -7,6 +7,7 @@ from momanim.mobject.bezier_curve import (
     Point,
     integer_interpolate,
     farin_rational_de_casteljau_between,
+    farin_rational_de_casteljau,
 )
 
 
@@ -276,11 +277,10 @@ struct Circle[dtype: DType = DType.float32](MObject):
         color_fill: SIMD[DType.uint8, 4],
         color_edges: SIMD[DType.uint8, 4] = WHITE,
     ) raises:
+        # comptime assert Self.dtype.is_floating_point()
         # Cubic Bézier approximation of a unit circle.
         # kappa = 4/3 * tan(pi/8) ~= 0.5522847498
-        comptime kappa = Scalar[Self.dtype](
-            4.0 / 3.0 * tan(pi / 8)
-        )  # Scalar[Self.dtype](0.5522847498)
+        comptime kappa = Scalar[Self.dtype](0.5522847498)
         self.curves = [
             QuadBezierCurve[Self.dtype](
                 Point[Self.dtype](
@@ -359,20 +359,46 @@ struct Circle[dtype: DType = DType.float32](MObject):
         return self.style.copy()  # TODO: Turn into a reference
 
 
-struct MorphingVMObject[dtype: DType = DType.float32](MObject):
-    comptime CoordDType = Self.dtype
+struct MorphingVMObject[
+    source_dtype: DType = DType.float32, target_dtype: DType = DType.float32
+](MObject):
+    comptime CoordDType = Self.target_dtype
     var curves: List[QuadBezierCurve[Self.CoordDType]]
+    var start_curves: List[QuadBezierCurve[Self.source_dtype]]
+    var end_curves: List[QuadBezierCurve[Self.CoordDType]]
     var style: Style
 
     def __init__(
         out self,
         *,
-        var curves: List[QuadBezierCurve[Self.CoordDType]],
+        var start_curves: List[QuadBezierCurve[Self.source_dtype]],
+        var end_curves: List[QuadBezierCurve[Self.CoordDType]],
         # TODO: Style should just be a pointer
         var style: Style,
     ) raises:
-        self.curves = curves^
+        self.start_curves = start_curves^
+        self.end_curves = end_curves^
         self.style = style^
+        self.curves = List[QuadBezierCurve[Self.CoordDType]](
+            capacity=len(self.end_curves)
+        )
+
+        var start_to_end_step = Float32(len(self.end_curves)) / Float32(
+            len(self.start_curves)
+        )
+        for i in range(len(self.end_curves)):
+            ref end_curve = self.end_curves[i]
+            var start_index = Int(round(Float32(i) * start_to_end_step))
+            ref start_curve = self.start_curves[start_index]
+            comptime for j in range(type_of(end_curve).size):
+                var curve = QuadBezierCurve[Self.CoordDType](
+                    start_curve.points[j].cast[Self.CoordDType](),
+                    end_curve.points[j],
+                )
+                # print('points: ')
+                # print("\tsquare points added: ", curve.points[0])
+                # print("\tcircle points added: ", curve.points[3])
+                self.curves.append(curve)
 
     def n_curves(self) -> Int:
         return len(self.curves)
@@ -387,13 +413,80 @@ struct MorphingVMObject[dtype: DType = DType.float32](MObject):
             origin_of(self)
         ]()[]
 
+    def morph(
+        mut self,
+        starting_mobject: Self,
+        a: Float32,
+        b: Float32,
+    ) -> Self:
+        var copy_obj = self.parallel_become_partial(
+            starting_mobject,
+            a=a,
+            b=b,
+        )
+        return copy_obj^
+
+    def parallel_become_partial(
+        mut self,
+        vmobject: Self,
+        a: Float32,
+        b: Float32,
+    ) -> Self:
+        "Gets new curves run all at once."
+        # if a <= 0 and b >= 1:
+        #     self.set_curves(
+        #         vmobject.copy_curves()
+        #     )  # TODO: This is not optimal, fix this
+        #     return self.copy()  # TODO: This is not optimal, fix this
+        var num_curves = vmobject.n_curves()
+        if num_curves == 0:
+            return self.copy()  # TODO: This is not optimal, fix this
+
+        var nppc = Int(QuadBezierCurve.size)
+
+        # Copy vmobject.points if vmobject is self to prevent unintended in-place modification
+        var vmobject_points = vmobject.copy_curves()
+
+        var curves = List[QuadBezierCurve[Self.CoordDType]](capacity=num_curves)
+        var t: Float32
+        if b > 1 or a > 1:
+            t = 1.0
+        elif b <= 0:
+            t = 0.0
+        else:
+            # TODO: Is there a better way to handle a? Its not used for much.
+            t = b
+        print("a: ", a, " b: ", b, " t: ", t)
+        for i in range(len(self.end_curves)):
+            var points = List[Point[Self.CoordDType]](
+                capacity=QuadBezierCurve.size
+            )
+
+            comptime for j in range(QuadBezierCurve.size):
+                ref curve = vmobject_points[i * QuadBezierCurve.size + j]
+
+                var point: Point[Self.CoordDType] = farin_rational_de_casteljau(
+                    curve, t
+                )
+                print("\t\t point: ", point, " curve: ", curve.points[0])
+                points.append(point)
+
+            # print("points: ", points)
+            curves.append(
+                QuadBezierCurve[Self.CoordDType](
+                    points[0], points[1], points[2], points[3]
+                )
+            )
+        self.set_curves(curves^)
+        return self.copy()  # TODO: This is not optimal, fix this
+
     def copy_curves(self) -> List[QuadBezierCurve[Self.CoordDType]]:
         return self.curves.copy()
 
     def set_curves(
         mut self, var curves: List[QuadBezierCurve[Self.CoordDType]]
     ) -> None:
-        self.curves = curves^
+        self.curves = curves.copy()
 
     def get_style(self) -> Style:
         return self.style.copy()  # TODO: Turn into a reference

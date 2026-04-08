@@ -19,6 +19,13 @@ struct Point[dtype: DType = DType.float32](
             x, y, Scalar[Self.dtype](1.0), Scalar[Self.dtype](1.0)
         )
 
+    def cast[target_dtype: DType](self) -> Point[target_dtype]:
+        return Point(
+            Scalar[target_dtype](self.coords[0]),
+            Scalar[target_dtype](self.coords[1]),
+            Scalar[target_dtype](self.coords[2]),
+        )
+
     def __init__(out self, simd: Self.SIMDType):
         self.coords = simd
 
@@ -87,6 +94,10 @@ def farin_rational_de_casteljau[
     See: https://en.wikipedia.org/wiki/De_Casteljau's_algorithm
     See: https://drna.padovauniversitypress.it/system/files/papers/DRNA-2024-3-09.pdf
     """
+    if t == 0:
+        return quad_bezier_curve.points[0]
+    if t == 1:
+        return quad_bezier_curve.points[3]
     # TODO: Is a copy the only way to handle this?
     var p_i_n = quad_bezier_curve.points.copy()
     # size = number of control points = n + 1 (degree n).
