@@ -34,6 +34,12 @@ struct Point[dtype: DType = DType.float32](
     def __mul__(self, other: Self) -> Self:
         return Self(self.coords * other.coords)
 
+    def __imul__(mut self, other: Self):
+        self.coords *= other.coords
+
+    def __imul__(mut self, other: Scalar[Self.dtype]):
+        self.coords *= other
+
     def __mul__(self, other: Scalar[Self.dtype]) -> Self:
         return Self(self.coords * other)
 
@@ -67,6 +73,10 @@ struct QuadBezierCurve[dtype: DType = DType.float32](
 
     def __init__(out self, var points: InlineArray[Self.Point, Self.size]):
         self.points = points
+
+    def __imul__(mut self, other: Scalar[Self.dtype]):
+        for ref point in self.points:
+            point *= other
 
 
 def farin_rational_de_casteljau[
