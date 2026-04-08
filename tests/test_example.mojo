@@ -5,7 +5,7 @@ from std.os import getenv
 from std.pathlib import Path
 from std.os.path import join
 from momanim.scene.scene import Scenable
-from momanim.mobject.polygram import Square
+from momanim.mobject.polygram import Square, Circle
 from momanim.data_structs.video import Video
 from momanim.io_backends.mav.video_write import video_write
 from momanim.scene.scene import Scenable
@@ -36,7 +36,7 @@ struct SquareToCircle(Scenable):
         self.renderer = alloc[BasicRenderer[Self]](1)
         self.renderer[] = BasicRenderer[Self](
             UnsafePointer(to=self).unsafe_origin_cast[MutExternalOrigin](),
-            fps=12,
+            fps=1,
             max_duration_seconds=4,
         )
 
@@ -50,7 +50,8 @@ struct SquareToCircle(Scenable):
         return self._background_color
 
     def construct(mut self) raises:
-        # circle = Circle()
+        circle = Circle(color_fill=BLACK)
+        circle.scale(100.0)
         var square = Square(
             QuadBezierCurve(
                 Point(Float32(-1.0), Float32(0.0)) * 100,
@@ -73,7 +74,8 @@ struct SquareToCircle(Scenable):
         # square.rotate(-3 * tau / 8)
         # circle.set_fill(PINK, opacity=0.5)
 
-        self.play(Create(square, run_time=2.0))
+        # self.play(Create(square, run_time=2.0))
+        self.play(Create(circle, run_time=4.0))
         # self.play(Transform(square, circle))
         # self.play(FadeOut(square))
 
