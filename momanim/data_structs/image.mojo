@@ -17,7 +17,7 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
     var line_size: UInt
     """Bytes per row (row stride). Must match the underlying buffer layout."""
 
-    fn __init__(out self, var elems: List[Scalar[Self.dtype]]) raises:
+    def __init__(out self, var elems: List[Scalar[Self.dtype]]) raises:
         self.w = UInt(len(elems))
         if len(elems) % 3 != 0:
             raise Error(
@@ -36,7 +36,24 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
         self.color_space = ColorSpace.RGB_24
         self.io_backend_opaque_params = {}
 
-    fn __init__(
+    def __init__(
+        out self,
+        w: UInt,
+        h: UInt,
+        ch: UInt,
+        line_size: UInt,
+        color_space: ColorSpace,
+        container: DataContainer[Self.dtype],
+    ) raises:
+        self.w = w
+        self.h = h
+        self.ch = ch
+        self.line_size = line_size
+        self.color_space = color_space
+        self.io_backend_opaque_params = {}
+        self._data = container.copy()
+
+    def __init__(
         out self,
         var ptr: UnsafePointer[Scalar[Self.dtype], MutExternalOrigin],
         size: Int,
@@ -60,7 +77,7 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
         self.color_space = ColorSpace.RGB_24
         self.io_backend_opaque_params = {}
 
-    fn numojo(mut self) raises -> nm.NDArray[Self.dtype]:
+    def numojo(mut self) raises -> nm.NDArray[Self.dtype]:
         var array = nm.NDArray[Self.dtype](
             shape=nm.NDArrayShape(Int(self.h), Int(self.w), Int(self.ch)),
             is_view=True,

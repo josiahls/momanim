@@ -17,6 +17,7 @@ from mav.ffmpeg.avutil.frame import AVFrame
 from mav.ffmpeg.avutil.error import AVERROR, AVERROR_EOF
 from mav.ffmpeg.avutil.pixfmt import AVPixelFormat
 from mav.ffmpeg.avutil.rational import AVRational
+from mav.ffmpeg.avutil.pixfmt import AVColorRange
 from std.logger.logger import Logger, Level, DEFAULT_LEVEL
 
 from std.testing import assert_equal
@@ -32,18 +33,37 @@ struct ImageInfo(Writable):
     var width: c_int
     var height: c_int
     var format: AVPixelFormat.ENUM_DTYPE
-    var n_color_spaces: c_int
+    var ch: c_int
+    "N color channels."
+    var color_range: c_int
+    """An enum value from AVColorRange.
+
+    See:
+       https://ffmpeg.org//doxygen/trunk/pixfmt_8h.html#a3da0bf691418bc22c4bcbe6583ad589a
+    
+    
+    """
     var line_size: c_int
 
-    fn __init__(out self):
+    def __init__(out self):
         self.width = 0
         self.height = 0
         self.format = AVPixelFormat.AV_PIX_FMT_NONE._value
-        self.n_color_spaces = 0
+        self.ch = 0
+        self.color_range = AVColorRange.AVCOL_RANGE_UNSPECIFIED._value
         self.line_size = 0
 
 
-fn decode(
+def get_ch(pix_fmt: AVPixelFormat.ENUM_DTYPE) raises -> c_int:
+    if pix_fmt == AVPixelFormat.AV_PIX_FMT_RGB24._value:
+        return 3
+    elif pix_fmt == AVPixelFormat.AV_PIX_FMT_RGBA._value:
+        return 4
+    else:
+        raise Error("Unsupported pixel format: ", pix_fmt)
+
+
+def decode(
     dec_ctx: UnsafePointer[AVCodecContext, origin=MutExternalOrigin],
     frame: UnsafePointer[AVFrame, origin=MutExternalOrigin],
     pkt: UnsafePointer[AVPacket, origin=MutExternalOrigin],
@@ -62,7 +82,8 @@ fn decode(
         image_info.width = frame[].width
         image_info.height = frame[].height
         image_info.format = dec_ctx[].pix_fmt
-        image_info.n_color_spaces = dec_ctx[].color_range
+        image_info.ch = get_ch(dec_ctx[].pix_fmt)
+        image_info.color_range = dec_ctx[].color_range
         image_info.line_size = frame[].linesize[0]
         # TODO: We should instead extend via passing in a List, that way
         # we do a chunked move operation instead of a copy which is
@@ -75,7 +96,7 @@ fn decode(
         )
 
 
-fn image_read[
+def image_read[
     in_buffer_size: c_int = 4096
 ](path: Path) raises -> Image[c_uchar.dtype]:
     """Reads an image file.
@@ -107,6 +128,7 @@ fn image_read[
     var codec = avcodec.avcodec_find_decoder_by_name(extension)
     var parser = avcodec.av_parser_init(codec[].id)
     var context = avcodec.avcodec_alloc_context3(codec)
+    # TODO: change the load format on extension.
     context[].pix_fmt = AVPixelFormat.AV_PIX_FMT_RGB24._value
     var ret = avcodec.avcodec_open2(context, codec, dict_ptr)
     assert_equal(ret, 0)
@@ -176,8 +198,13 @@ fn image_read[
     )
     image.w = UInt(image_info.width)
     image.h = UInt(image_info.height)
-    # Number of channels. We add 1 since AVCodecContext.color_range starts at 0.
-    image.ch = UInt(image_info.n_color_spaces) + 1
+    image.ch = UInt(image_info.ch)
+    image.io_backend_opaque_params = {}
+    image.io_backend_opaque_params["color_range"] = (
+        UnsafePointer(to=image_info.color_range)
+        .bitcast[NoneType]()
+        .unsafe_origin_cast[MutExternalOrigin]()
+    )
     if image_info.format == AVPixelFormat.AV_PIX_FMT_RGB24._value:
         image.color_space = ColorSpace.RGB_24
     elif image_info.format == AVPixelFormat.AV_PIX_FMT_RGBA._value:
