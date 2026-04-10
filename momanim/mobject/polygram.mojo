@@ -1,7 +1,7 @@
 from momanim.typing import Vector3D
 import numojo as nm
 from std.math import sqrt, tan, pi
-from momanim.utils.color import WHITE
+from momanim.utils.color import WHITE, TRANSPARENT
 from momanim.mobject.bezier_curve import (
     QuadBezierCurve,
     Point,
@@ -158,7 +158,7 @@ trait MObject(Copyable, Writable):
 
 @fieldwise_init
 struct Style(Copyable, Writable):
-    comptime kernel_size: Int = 5
+    comptime kernel_size: Int = 3
     var color_fill: SIMD[DType.uint8, 4]
     var color_edges: SIMD[DType.uint8, 4]
     var continuous: Bool
@@ -176,7 +176,7 @@ struct Square[dtype: DType = DType.float32](MObject):
     def __init__(
         out self,
         *,
-        color_fill: SIMD[DType.uint8, 4],
+        color_fill: SIMD[DType.uint8, 4] = TRANSPARENT,
         color_edges: SIMD[DType.uint8, 4] = WHITE,
     ) raises:
         self.curves = [
@@ -224,7 +224,7 @@ struct Square[dtype: DType = DType.float32](MObject):
         curve3: QuadBezierCurve[Self.dtype],
         curve4: QuadBezierCurve[Self.dtype],
         *,
-        color_fill: SIMD[DType.uint8, 4],
+        color_fill: SIMD[DType.uint8, 4] = TRANSPARENT,
         color_edges: SIMD[DType.uint8, 4] = WHITE,
     ) raises:
         self.curves = [curve1, curve2, curve3, curve4]
@@ -274,7 +274,7 @@ struct Circle[dtype: DType = DType.float32](MObject):
     def __init__(
         out self,
         *,
-        color_fill: SIMD[DType.uint8, 4],
+        color_fill: SIMD[DType.uint8, 4] = TRANSPARENT,
         color_edges: SIMD[DType.uint8, 4] = WHITE,
     ) raises:
         # comptime assert Self.dtype.is_floating_point()
@@ -358,6 +358,16 @@ struct Circle[dtype: DType = DType.float32](MObject):
     def get_style(self) -> Style:
         return self.style.copy()  # TODO: Turn into a reference
 
+    def set_fill(
+        mut self, color: SIMD[DType.uint8, 4], opacity: Float32 = 1.0
+    ) -> None:
+        if opacity != 1.0:
+            self.style.color_fill = SIMD[DType.uint8, 4](
+                color[0], color[1], color[2], UInt8(opacity * 255.0)
+            )
+        else:
+            self.style.color_fill = color
+
 
 struct MorphingVMObject[
     source_dtype: DType = DType.float32, target_dtype: DType = DType.float32
@@ -366,7 +376,9 @@ struct MorphingVMObject[
     var curves: List[QuadBezierCurve[Self.CoordDType]]
     var start_curves: List[QuadBezierCurve[Self.source_dtype]]
     var end_curves: List[QuadBezierCurve[Self.CoordDType]]
-    var style: Style
+    var start_style: Style
+    var end_style: Style
+    var current_style: Style
 
     def __init__(
         out self,
@@ -374,11 +386,14 @@ struct MorphingVMObject[
         var start_curves: List[QuadBezierCurve[Self.source_dtype]],
         var end_curves: List[QuadBezierCurve[Self.CoordDType]],
         # TODO: Style should just be a pointer
-        var style: Style,
+        var start_style: Style,
+        var end_style: Style,
     ) raises:
         self.start_curves = start_curves^
         self.end_curves = end_curves^
-        self.style = style^
+        self.start_style = start_style^
+        self.end_style = end_style^
+        self.current_style = self.start_style.copy()
         self.curves = List[QuadBezierCurve[Self.CoordDType]](
             capacity=len(self.end_curves)
         )
@@ -456,7 +471,7 @@ struct MorphingVMObject[
         else:
             # TODO: Is there a better way to handle a? Its not used for much.
             t = b
-        print("a: ", a, " b: ", b, " t: ", t)
+        # print("a: ", a, " b: ", b, " t: ", t)
         for i in range(len(self.end_curves)):
             var points = List[Point[Self.CoordDType]](
                 capacity=QuadBezierCurve.size
@@ -468,7 +483,7 @@ struct MorphingVMObject[
                 var point: Point[Self.CoordDType] = farin_rational_de_casteljau(
                     curve, t
                 )
-                print("\t\t point: ", point, " curve: ", curve.points[0])
+                # print("\t\t point: ", point, " curve: ", curve.points[0])
                 points.append(point)
 
             # print("points: ", points)
@@ -489,4 +504,4 @@ struct MorphingVMObject[
         self.curves = curves.copy()
 
     def get_style(self) -> Style:
-        return self.style.copy()  # TODO: Turn into a reference
+        return self.current_style.copy()  # TODO: Turn into a reference
