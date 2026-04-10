@@ -3,6 +3,7 @@ from momanim.animation.animation import Animatable
 
 from momanim.mobject.polygram import MObject, MorphingVMObject
 from momanim.mobject.bezier_curve import QuadBezierCurve
+from momanim.mobject.bezier_curve import interpolate
 
 
 struct Transform[
@@ -36,7 +37,8 @@ struct Transform[
         ](
             start_curves=self.starting_obj[].copy_curves(),
             end_curves=self.target_obj[].copy_curves(),
-            style=self.starting_obj[].get_style(),
+            start_style=self.starting_obj[].get_style(),
+            end_style=self.target_obj[].get_style(),
         )
         self.run_time = run_time
         self._current_frame = 0
@@ -59,6 +61,18 @@ struct Transform[
             a=0,
             b=max_delta,
         )
+        var current_style = self.morphing_obj.start_style.copy()
+        current_style.color_fill = interpolate[DType.float32, 4](
+            self.morphing_obj.start_style.color_fill.cast[DType.float32](),
+            self.morphing_obj.end_style.color_fill.cast[DType.float32](),
+            max_delta,
+        ).cast[DType.uint8]()
+        current_style.color_edges = interpolate[DType.float32, 4](
+            self.morphing_obj.start_style.color_edges.cast[DType.float32](),
+            self.morphing_obj.end_style.color_edges.cast[DType.float32](),
+            max_delta,
+        ).cast[DType.uint8]()
+        self.morphing_obj.current_style = current_style^
 
         self._current_frame += 1
         return copy_obj^

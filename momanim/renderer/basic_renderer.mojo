@@ -1,4 +1,5 @@
 from momanim.data_structs.video import Video
+from momanim.data_structs.image import Image
 from momanim.scene.scene import Scenable
 from momanim.camera.camera import Camera
 from std.pathlib import Path
@@ -10,9 +11,11 @@ from momanim.mobject.bezier_curve import (
 )
 from momanim.utils.color import BLACK
 from momanim.io_backends.mav.video_write import video_write
+from momanim.io_backends.mav.image_write import image_write
 from momanim.animation.creation import Create
+from std.memory import memset
 from momanim.animation.animation import Animatable
-from std.math import e, pi, sqrt
+from std.math import e, pi, sqrt, round
 
 
 def pdf(z: Float32) -> Float32:
@@ -128,12 +131,28 @@ struct BasicRenderer[T: Scenable](Movable):
         )
 
     @staticmethod
+    def background_id_mask_from_camera(
+        camera: Camera,
+    ) raises -> UnsafePointer[Scalar[DType.uint8], MutExternalOrigin]:
+        var background_id_mask = alloc[Scalar[DType.uint8]](
+            Int(camera.pixel_height) * Int(camera.pixel_width)
+        )
+        memset(
+            background_id_mask,
+            0,
+            Int(camera.pixel_height) * Int(camera.pixel_width),
+        )
+        return background_id_mask^
+
+    @staticmethod
     def render_frame[
         M: MObject
     ](mut video: Video[DType.uint8], mut scene: Self.T, mut obj: M,) raises:
         ref camera = scene.cameras()[0]
         var channels = len(scene.background_color())
         var new_frame = Self.frame_from_camera(camera, channels)
+        # background_id_mask tracks the objects that have been currently written.
+        var background_id_mask = Self.background_id_mask_from_camera(camera)
         var n_elems = (
             Int(camera.pixel_height) * Int(camera.pixel_width) * channels
         )
@@ -156,11 +175,31 @@ struct BasicRenderer[T: Scenable](Movable):
             pixel_num += 1
 
         var row_stride = camera.pixel_width * channels
+        # One byte per pixel; must not reuse RGBA row_stride or mask indexing is wrong
+        # and writes go out of bounds (can corrupt unrelated buffers / the final frame).
+        var background_mask_row_stride = Int(camera.pixel_width)
         # TODO: We probably just want to dispatch on MObject types. e.g.:
         # vecotirzed is a special type, but there could be others such as groups,
         # vgroups, etc.
+
+        var object_id: UInt8 = 1
         # TODO: Ideally we also vectorize this. Its possible we need a nicer way
         # of handling this via primitives.
+
+        var xmin: Int = -1  # min([curve.min_x() for curve in obj.get_curves()])
+        var xmax: Int = -1  # max([curve.max_x() for curve in obj.get_curves()])
+        var ymin: Int = -1  # min([curve.min_y() for curve in obj.get_curves()])
+        var ymax: Int = -1  # max([curve.max_y() for curve in obj.get_curves()])
+        for curve in obj.get_curves():
+            xmin = min(xmin, Int(curve.min_x())) if xmin != -1 else Int(
+                curve.min_x()
+            )
+            xmax = max(xmax, Int(curve.max_x()))
+            ymin = min(ymin, Int(curve.min_y())) if ymin != -1 else Int(
+                curve.min_y()
+            )
+            ymax = max(ymax, Int(curve.max_y()))
+
         for i in range(obj.n_curves()):
             var curve = obj.get_curve(i)
             ref style = obj.get_style()
@@ -172,8 +211,47 @@ struct BasicRenderer[T: Scenable](Movable):
                 new_frame,
                 camera,
                 row_stride,
+                background_mask_row_stride,
                 channels,
                 style,
+                background_id_mask,
+                object_id,
+            )
+
+        for i in range(obj.n_curves()):
+            var curve = obj.get_curve(i)
+            ref style = obj.get_style()
+            Self.draw_fill[M.CoordDType](
+                i,
+                curve,
+                center_origin,
+                new_frame,
+                camera,
+                row_stride,
+                background_mask_row_stride,
+                channels,
+                style,
+                background_id_mask,
+                object_id,
+                xmin,
+                ymin,
+                xmax,
+                ymax,
+            )
+            # TODO: Really don't want to have to do this twice...
+            Self.draw[M.CoordDType](
+                i,
+                curve,
+                center_origin,
+                new_frame,
+                camera,
+                row_stride,
+                background_mask_row_stride,
+                channels,
+                style,
+                background_id_mask,
+                object_id,
+                skip_background=True,
             )
 
         var frame_ptr = alloc[
@@ -196,15 +274,20 @@ struct BasicRenderer[T: Scenable](Movable):
         mut new_frame: UnsafePointer[Scalar[DType.uint8], MutExternalOrigin],
         camera: Camera,
         row_stride: UInt,
+        background_mask_row_stride: Int,
         channels: Int,
         style: Style,
+        mut background_id_mask: UnsafePointer[
+            Scalar[DType.uint8], MutExternalOrigin
+        ],
+        object_id: UInt8,
+        skip_background: Bool = False,
     ) raises:
         var granularity: Float32 = 0.01
         var previous_point: Optional[Point[curve_dtype]] = None
         var kernel = PaintKernel[style.kernel_size]()
+        var background_kernel = PaintKernel[style.kernel_size, channels=1]()
 
-        var prev_x: Int = -1
-        var prev_y: Int = -1
         for t in range(0, Int(1 / granularity)):
             # TODO: Verify, can `farin_rational_de_casteljau` be used as a gpu kernel?
             var p0 = (
@@ -223,7 +306,104 @@ struct BasicRenderer[T: Scenable](Movable):
             ):
                 continue
 
-            kernel.store(x, y, style.color_edges, new_frame, Int(row_stride))
+            # kernel.store(x, y, style.color_edges, new_frame, Int(row_stride))
+            new_frame.store(
+                val=style.color_edges.cast[DType.uint8](),
+                offset=y * row_stride + x * channels,
+            )
+            if not skip_background:
+                background_id_mask.store(
+                    val=object_id,
+                    offset=y * background_mask_row_stride + x,
+                )
+                print(
+                    (
+                        "background_id_mask.store(val=object_id, offset=y *"
+                        " row_stride + x)"
+                    ),
+                    background_id_mask.load(
+                        offset=y * background_mask_row_stride + x
+                    ),
+                    "y: ",
+                    y,
+                    "x: ",
+                    x,
+                )
+
+    @staticmethod
+    def draw_fill[
+        curve_dtype: DType
+    ](
+        curve_idx: Int,
+        curve: QuadBezierCurve[curve_dtype],
+        center_origin: Point[curve_dtype],
+        mut new_frame: UnsafePointer[Scalar[DType.uint8], MutExternalOrigin],
+        camera: Camera,
+        row_stride: UInt,
+        background_mask_row_stride: Int,
+        channels: Int,
+        style: Style,
+        mut background_id_mask: UnsafePointer[
+            Scalar[DType.uint8], MutExternalOrigin
+        ],
+        object_id: UInt8,
+        xmin: Int,
+        ymin: Int,
+        xmax: Int,
+        ymax: Int,
+    ) raises:
+        var granularity: Float32 = 0.01
+        var previous_point: Optional[Point[curve_dtype]] = None
+        var kernel = PaintKernel[style.kernel_size]()
+
+        if style.color_fill[3] == 0:
+            # Skip if the opacity is completely transparent
+            return
+
+        # Same pixel space as `draw`: stroke uses `de_casteljau(...) + center_origin`.
+        # Curve min/max are in local coordinates; without `center_origin` the loops
+        # scan tiny indices (e.g. -1..1) while the mask is written at frame pixels
+        # (e.g. 332), so `mask == object_id` never matches.
+        var ox = Float64(center_origin.coords[0])
+        var oy = Float64(center_origin.coords[1])
+        var xmin_rounded = Int(round(Float64(xmin + ox))) - 5
+        var xmax_rounded = Int(round(Float64(xmax + ox)))
+        var ymin_rounded = Int(round(Float64(ymin + oy))) - 5
+        var ymax_rounded = Int(round(Float64(ymax + oy)))
+
+        for y in range(ymin_rounded, ymax_rounded + 1):
+            if y < 0 or y >= Int(camera.pixel_height):
+                continue
+
+            var edge_count: Int = 0
+            var x_edge_loc: Int = -1
+            var x_col_start: Int = -1
+            # print('checking y: ', y)
+            for x in range(xmin_rounded, xmax_rounded + 1):
+                if x < 0 or x >= Int(camera.pixel_width):
+                    continue
+
+                # print('checking x: ', x, 'background_id_mask[y * background_mask_row_stride + x]', background_id_mask[y * background_mask_row_stride + x])
+
+                if (
+                    background_id_mask[y * background_mask_row_stride + x]
+                    == object_id
+                ) and (x_edge_loc != x - 1):
+                    edge_count += 1
+                    x_edge_loc = x
+                    print("edge_count: ", edge_count)
+                    if edge_count % 2 != 0:
+                        x_col_start = x
+
+                if edge_count % 2 == 0 and edge_count > 0:
+                    edge_count = 0
+                    for fill_x in range(x_col_start + 1, x):
+                        # print('drawing fill at x:', x,'y:', y, 'object_id:', object_id, 'color:', style.color_fill)
+                        # kernel.store(x, y, style.color_fill, new_frame, Int(row_stride))
+                        new_frame.store(
+                            val=style.color_fill.cast[DType.uint8](),
+                            offset=y * row_stride + fill_x * channels,
+                        )
 
     def play(mut self, mut animation: Some[Animatable]) raises -> None:
         # TODO: Eventually support multi camera rendering
@@ -245,4 +425,17 @@ struct BasicRenderer[T: Scenable](Movable):
             path,
             fps=self.fps,
             max_duration_seconds=self.max_duration_seconds,
+        )
+
+    def render_image(mut self, path: Path) raises:
+        image_write(
+            Image[DType.uint8](
+                w=self.videos[0].w,
+                h=self.videos[0].h,
+                ch=4,
+                color_space=ColorSpace.RGBA_32,
+                container=self.videos[0]._frames[-1]._data.copy(),
+                line_size=self.videos[0].linesize,
+            ),
+            path,
         )

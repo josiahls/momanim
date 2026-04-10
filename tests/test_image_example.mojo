@@ -20,7 +20,7 @@ from momanim.animation.animation import Animatable
 # from momanim.animation.creation import Create
 # from momanim.renderer.basic_renderer import BasicRenderer
 
-from momanim.utils.color import rgb, rgba, WHITE, BLACK, BLUE_E
+from momanim.utils.color import rgb, rgba, WHITE, BLACK, BLUE_E, TRANSPARENT, PINK
 from momanim.mobject.bezier_curve import QuadBezierCurve, Point
 
 
@@ -38,8 +38,8 @@ struct SquareToCircle(Scenable):
         self.renderer = alloc[BasicRenderer[Self]](1)
         self.renderer[] = BasicRenderer[Self](
             UnsafePointer(to=self).unsafe_origin_cast[MutExternalOrigin](),
-            fps=12,
-            max_duration_seconds=4,
+            fps=2,
+            max_duration_seconds=2,
         )
 
     def play[T: Animatable](mut self, var animation: T) raises -> None:
@@ -52,7 +52,7 @@ struct SquareToCircle(Scenable):
         return self._background_color
 
     def construct(mut self) raises:
-        circle = Circle(color_fill=BLACK)
+        circle = Circle()
         circle.scale(100.0)
         var square = Square(
             QuadBezierCurve(
@@ -69,29 +69,28 @@ struct SquareToCircle(Scenable):
             QuadBezierCurve(
                 Point(Float32(0.0), Float32(1.0)) * 100, 
                 Point(Float32(-1.0), Float32(0.0)) * 100,
-            ),
-            color_fill=BLACK
+            )
         )
         # square.flip(RIGHT)
         # square.rotate(-3 * tau / 8)
         # circle.set_fill(PINK, opacity=0.5)
 
-        self.play(Create(square, run_time=2.0))
-        # self.play(Create(circle, run_time=2.0))
-        self.play(Transform(square, circle))
+        self.play(Create(square, run_time=0.5))
+        self.play(Transform(square, circle, run_time=0.5))
         # self.play(FadeOut(square))
 
     def render(mut self, path: Path) raises -> None:
         self.construct()
-        self.renderer[].render(path)
+        self.renderer[].render_image(path)
 
 
 def test_SquareToCircle() raises:
     var scene = SquareToCircle()
     var test_data_root = getenv("PIXI_PROJECT_ROOT")
-    # scene.render(Path(join(test_data_root, "test_data/test_example/test_SquareToCircle.webm")))
+    scene.render(Path(join(test_data_root, "test_data/test_image_example/test_SquareToCircle.png")))
+    # scene.render(Path(join(test_data_root, "test_data/test_image_example/test_SquareToCircle.jpeg")))
     # scene.render(Path(join(test_data_root, "test_data/test_example/test_SquareToCircle.mp4")))
-    scene.render(Path(join(test_data_root, "test_data/test_example/test_SquareToCircle.gif")))
+    # scene.render(Path(join(test_data_root, "test_data/test_example/test_SquareToCircle.gif")))
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

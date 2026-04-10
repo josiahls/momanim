@@ -85,6 +85,38 @@ struct QuadBezierCurve[dtype: DType = DType.float32](
         for ref point in self.points:
             point *= other
 
+    def min_x(self) -> Scalar[Self.dtype]:
+        return SIMD[Self.dtype, 4](
+            self.points[0].coords[0],
+            self.points[1].coords[0],
+            self.points[2].coords[0],
+            self.points[3].coords[0],
+        ).reduce_min()
+
+    def min_y(self) -> Scalar[Self.dtype]:
+        return SIMD[Self.dtype, 4](
+            self.points[0].coords[1],
+            self.points[1].coords[1],
+            self.points[2].coords[1],
+            self.points[3].coords[1],
+        ).reduce_min()
+
+    def max_x(self) -> Scalar[Self.dtype]:
+        return SIMD[Self.dtype, 4](
+            self.points[0].coords[0],
+            self.points[1].coords[0],
+            self.points[2].coords[0],
+            self.points[3].coords[0],
+        ).reduce_max()
+
+    def max_y(self) -> Scalar[Self.dtype]:
+        return SIMD[Self.dtype, 4](
+            self.points[0].coords[1],
+            self.points[1].coords[1],
+            self.points[2].coords[1],
+            self.points[3].coords[1],
+        ).reduce_max()
+
 
 def farin_rational_de_casteljau[
     dtype: DType, //
@@ -229,11 +261,15 @@ def integer_interpolate(
     return (value, residue)
 
 
-def interpolate(
-    start: Float32,
-    end: Float32,
-    alpha: Float32,
-) -> Float32:
+def interpolate[
+    T: DType, width: Int
+](
+    start: SIMD[T, width],
+    end: SIMD[T, width],
+    alpha: Scalar[T],
+) -> SIMD[
+    T, width
+]:
     """Linearly interpolates between two values ``start`` and ``end``.
 
     See: https://github.com/ManimCommunity/manim/blob/21cf9998cc7ad34cdc5cb2fae09aa500d88d86c2/manim/utils/bezier.py#L1032
