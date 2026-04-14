@@ -73,10 +73,12 @@ trait MObject(Copyable, Writable):
         #   and select its part which ranges from t=0.4 to t=1.
         # - upper_index is 7 and upper_residue is 0.8, which means the algorithm will look at the 7th Bézier
         #   and select its part which ranges from t=0 to t=0.8.
-        var lower_index, lower_residue = integer_interpolate(0, num_curves, a)
-        var upper_index, upper_residue = integer_interpolate(0, num_curves, b)
-
-        var nppc = Int(QuadBezierCurve.size)
+        var lower_index, lower_residue = integer_interpolate(
+            0, Float32(num_curves), a
+        )
+        var upper_index, upper_residue = integer_interpolate(
+            0, Float32(num_curves), b
+        )
 
         # Copy vmobject.points if vmobject is self to prevent unintended in-place modification
         var vmobject_points = vmobject.copy_curves()
@@ -277,52 +279,39 @@ struct Circle[dtype: DType = DType.float32](MObject):
         color_fill: SIMD[DType.uint8, 4] = TRANSPARENT,
         color_edges: SIMD[DType.uint8, 4] = WHITE,
     ) raises:
-        # comptime assert Self.dtype.is_floating_point()
         # Cubic Bézier approximation of a unit circle.
-        # kappa = 4/3 * tan(pi/8) ~= 0.5522847498
-        comptime kappa = Scalar[Self.dtype](0.5522847498)
-        self.curves = [
-            QuadBezierCurve[Self.dtype](
-                Point[Self.dtype](
-                    Scalar[Self.dtype](-1.0), Scalar[Self.dtype](0.0)
-                ),
-                Point[Self.dtype](Scalar[Self.dtype](-1.0), kappa),
-                Point[Self.dtype](-kappa, Scalar[Self.dtype](1.0)),
-                Point[Self.dtype](
-                    Scalar[Self.dtype](0.0), Scalar[Self.dtype](1.0)
-                ),
-            ),
-            QuadBezierCurve[Self.dtype](
-                Point[Self.dtype](
-                    Scalar[Self.dtype](0.0), Scalar[Self.dtype](1.0)
-                ),
-                Point[Self.dtype](kappa, Scalar[Self.dtype](1.0)),
-                Point[Self.dtype](Scalar[Self.dtype](1.0), kappa),
-                Point[Self.dtype](
-                    Scalar[Self.dtype](1.0), Scalar[Self.dtype](0.0)
-                ),
-            ),
-            QuadBezierCurve[Self.dtype](
-                Point[Self.dtype](
-                    Scalar[Self.dtype](1.0), Scalar[Self.dtype](0.0)
-                ),
-                Point[Self.dtype](Scalar[Self.dtype](1.0), -kappa),
-                Point[Self.dtype](kappa, Scalar[Self.dtype](-1.0)),
-                Point[Self.dtype](
-                    Scalar[Self.dtype](0.0), Scalar[Self.dtype](-1.0)
-                ),
-            ),
-            QuadBezierCurve[Self.dtype](
-                Point[Self.dtype](
-                    Scalar[Self.dtype](0.0), Scalar[Self.dtype](-1.0)
-                ),
-                Point[Self.dtype](-kappa, Scalar[Self.dtype](-1.0)),
-                Point[Self.dtype](Scalar[Self.dtype](-1.0), -kappa),
-                Point[Self.dtype](
-                    Scalar[Self.dtype](-1.0), Scalar[Self.dtype](0.0)
-                ),
-            ),
+        var kappa = Scalar[Float64.dtype](
+            4.0 / 3.0 * tan(pi / 8)
+        )  # ~= 0.5522847498
+        self.curves = List[QuadBezierCurve[Self.dtype]](capacity=4)
+
+        var pairs = [
+            (-1.0, 0.0),
+            (0.0, -1.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+            (-1.0, 0.0),
         ]
+
+        for i in range(1, len(pairs)):
+            var p0 = SIMD[Float64.dtype, 2](pairs[i - 1][0], pairs[i - 1][1])
+            var p3 = SIMD[Float64.dtype, 2](pairs[i][0], pairs[i][1])
+
+            var p1: SIMD[Float64.dtype, 2] = p0 + kappa * SIMD[
+                Float64.dtype, 2
+            ](-p0[1], p0[0])
+            var p2: SIMD[Float64.dtype, 2] = p3 - kappa * SIMD[
+                Float64.dtype, 2
+            ](-p3[1], p3[0])
+
+            self.curves.append(
+                QuadBezierCurve[Self.dtype](
+                    Point[Self.dtype](simd=p0.cast[Self.dtype]()),
+                    Point[Self.dtype](simd=p1.cast[Self.dtype]()),
+                    Point[Self.dtype](simd=p2.cast[Self.dtype]()),
+                    Point[Self.dtype](simd=p3.cast[Self.dtype]()),
+                )
+            )
 
         self.style = Style(
             color_fill=color_fill,
@@ -336,6 +325,13 @@ struct Circle[dtype: DType = DType.float32](MObject):
     def scale(mut self, factor: Scalar[Self.CoordDType]) -> None:
         for ref curve in self.curves:
             curve *= factor
+
+    def translate(
+        mut self, vector: SIMD[Self.CoordDType, Point[Self.CoordDType].dim]
+    ) -> None:
+        for ref curve in self.curves:
+            curve += vector
+            print("after translation curve: ", curve.points[0], curve.points[3])
 
     def get_curve(self, index: Int) -> QuadBezierCurve[Self.CoordDType]:
         return self.curves[index]
@@ -367,6 +363,74 @@ struct Circle[dtype: DType = DType.float32](MObject):
             )
         else:
             self.style.color_fill = color
+
+
+struct Line[dtype: DType = DType.float32](MObject):
+    comptime CoordDType = Self.dtype
+    var curves: List[QuadBezierCurve[Self.CoordDType]]
+    var style: Style
+
+    def __init__(
+        out self,
+        *,
+    ) raises:
+        self.curves = [
+            QuadBezierCurve[Self.dtype](
+                Point[Self.dtype](
+                    Scalar[Self.dtype](-1.0), Scalar[Self.dtype](0.0)
+                ),
+                Point[Self.dtype](
+                    Scalar[Self.dtype](1.0), Scalar[Self.dtype](0.0)
+                ),
+            )
+        ]
+        self.style = Style(
+            color_fill=TRANSPARENT,
+            color_edges=WHITE,
+            continuous=True,
+        )
+
+    def n_curves(self) -> Int:
+        return len(self.curves)
+
+    def get_curve(self, index: Int) -> QuadBezierCurve[Self.CoordDType]:
+        return self.curves[index]
+
+    def get_curves[
+        o: Origin
+    ](ref[o] self) -> ref[o] List[QuadBezierCurve[Self.CoordDType]]:
+        return UnsafePointer(to=self.curves).unsafe_origin_cast[
+            origin_of(self)
+        ]()[]
+
+    def copy_curves(self) -> List[QuadBezierCurve[Self.CoordDType]]:
+        return self.curves.copy()
+
+    def set_curves(
+        mut self, var curves: List[QuadBezierCurve[Self.CoordDType]]
+    ) -> None:
+        self.curves = curves^
+
+    def get_style(self) -> Style:
+        return self.style.copy()
+
+    def set_fill(
+        mut self, color: SIMD[DType.uint8, 4], opacity: Float32 = 1.0
+    ) -> None:
+        if opacity != 1.0:
+            self.style.color_fill = SIMD[DType.uint8, 4](
+                color[0], color[1], color[2], UInt8(opacity * 255.0)
+            )
+
+    def scale(mut self, factor: Scalar[Self.CoordDType]) -> None:
+        for ref curve in self.curves:
+            curve *= factor
+
+    def translate(
+        mut self, vector: SIMD[Self.CoordDType, Point[Self.CoordDType].dim]
+    ) -> None:
+        for ref curve in self.curves:
+            curve += vector
 
 
 struct MorphingVMObject[

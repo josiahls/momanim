@@ -28,6 +28,9 @@ struct ColorSpace(Enumable):
     comptime RGB_8 = Self(4)
     """Packed RGB 8:8:8, 24bpp, RGBRGB...
     """
+    comptime GREY_8 = Self(5)
+    """8 bits, 1 channel, 8bpp, Y...
+    """
 
     @implicit
     def __init__(out self, value: Self.dtype):

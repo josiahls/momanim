@@ -124,13 +124,15 @@ def image_write(image: Image[c_uchar.dtype], path: Path) raises:
     var codec = avcodec.avcodec_find_encoder_by_name(codec_name)
     var context = avcodec.avcodec_alloc_context3(codec)
     context[].time_base = AVRational(num=1, den=25)
-    var from_fmt = AVPixelFormat.AV_PIX_FMT_NONE._value
+    var from_fmt: AVPixelFormat.ENUM_DTYPE
     if image.color_space == ColorSpace.RGB_24:
         from_fmt = AVPixelFormat.AV_PIX_FMT_RGB24._value
     elif image.color_space == ColorSpace.RGBA_32:
         from_fmt = AVPixelFormat.AV_PIX_FMT_RGBA._value
     elif image.color_space == ColorSpace.YUV_420P:
         from_fmt = AVPixelFormat.AV_PIX_FMT_YUV420P._value
+    elif image.color_space == ColorSpace.GREY_8:
+        from_fmt = AVPixelFormat.AV_PIX_FMT_GRAY8._value
     else:
         raise Error("Unsupported color space: ", image.color_space)
     context[].width = c_int(image.w)
