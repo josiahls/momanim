@@ -1,10 +1,10 @@
 # TODO: We might need to parameterize this to either 2 or 4 dimensions if we continue
 # to use SIMD.
 struct Point[dtype: DType = DType.float32](
-    Copyable, Equatable, Movable, TrivialRegisterPassable, Writable
+    Copyable, Equatable, ImplicitlyCopyable, Movable, Writable
 ):
-    comptime SIMDType = SIMD[Self.dtype, 4]
-    var coords: Self.SIMDType
+    comptime dim: Int = 4
+    var coords: InlineArray[Scalar[Self.dtype], Self.dim]
 
     def __init__(
         out self,
@@ -12,12 +12,10 @@ struct Point[dtype: DType = DType.float32](
         y: Scalar[Self.dtype],
         z: Scalar[Self.dtype],
     ):
-        self.coords = Self.SIMDType(x, y, z, 1.0)
+        self.coords = [x, y, z, 1.0]
 
     def __init__(out self, x: Scalar[Self.dtype], y: Scalar[Self.dtype]):
-        self.coords = Self.SIMDType(
-            x, y, Scalar[Self.dtype](1.0), Scalar[Self.dtype](1.0)
-        )
+        self.coords = [x, y, Scalar[Self.dtype](1.0), Scalar[Self.dtype](1.0)]
 
     def cast[target_dtype: DType](self) -> Point[target_dtype]:
         return Point(
@@ -26,33 +24,66 @@ struct Point[dtype: DType = DType.float32](
             Scalar[target_dtype](self.coords[2]),
         )
 
-    def __init__(out self, simd: Self.SIMDType):
-        self.coords = simd
+    def __init__(out self, coords: InlineArray[Scalar[Self.dtype], Self.dim]):
+        self.coords = coords.copy()
+
+    def __init__(out self, simd: SIMD[Self.dtype, 2]):
+        self.coords = [
+            simd[0],
+            simd[1],
+            Scalar[Self.dtype](1.0),
+            Scalar[Self.dtype](1.0),
+        ]
+
+    def __init__(out self, simd: SIMD[Self.dtype, Self.dim]):
+        # TODO: Need to handle this case also.
+        self.coords = [simd[0], simd[1], simd[2], simd[3]]
+
+    def load[width: Int = Self.dim](self) -> SIMD[Self.dtype, width]:
+        return self.coords.unsafe_ptr().load[width]()
 
     def __sub__(self, other: Self) -> Self:
-        return Self(self.coords - other.coords)
+        return Self(self.load() - other.load())
+
+    def __sub__(self, other: Scalar[Self.dtype]) -> Self:
+        return Self(self.load() - other)
 
     def __truediv__(self, other: Scalar[Self.dtype]) -> Self:
-        return Self(self.coords / other)
+        return Self(self.load() / other)
 
     def __add__(self, other: Self) -> Self:
-        return Self(self.coords + other.coords)
+        return Self(self.load() + other.load())
+
+    def __add__(self, other: Scalar[Self.dtype]) -> Self:
+        return Self(self.load() + other)
 
     def __mul__(self, other: Self) -> Self:
-        return Self(self.coords * other.coords)
-
-    def __imul__(mut self, other: Self):
-        self.coords *= other.coords
-
-    def __imul__(mut self, other: Scalar[Self.dtype]):
-        self.coords *= other
+        return Self(self.load() * other.load())
 
     def __mul__(self, other: Scalar[Self.dtype]) -> Self:
-        return Self(self.coords * other)
+        return Self(self.load() * other)
+
+    def __mul__(self, other: SIMD[Self.dtype, Self.dim]) -> Self:
+        return Self(self.load() * other)
+
+    def __imul__(mut self, other: Self):
+        self.coords.unsafe_ptr().store(self.load() * other.load())
+
+    def __imul__(mut self, other: Scalar[Self.dtype]):
+        self.coords.unsafe_ptr().store(self.load() * other)
+
+    def __iadd__(mut self, other: SIMD[Self.dtype, Self.dim]):
+        var ptr = self.coords.unsafe_ptr()
+        # print("\tpoint before: ", ptr.load[Self.dim](), ' + ', other)
+        ptr.store(offset=0, val=self.load() + other)
+        # print("\tpoint after: ", ptr.load[Self.dim]())
+
+    def __iadd__(mut self, other: Self):
+        self.coords.unsafe_ptr().store(self.load() + other.load())
 
 
 struct QuadBezierCurve[dtype: DType = DType.float32](
-    Copyable, ImplicitlyCopyable, Writable
+    Copyable, ImplicitlyCopyable, Movable, Writable
 ):
     """A quadratic bezier curve defined by a start point, 2 control points,
     and an end point.
@@ -70,20 +101,29 @@ struct QuadBezierCurve[dtype: DType = DType.float32](
         control2: Self.Point,
         anchor2: Self.Point,
     ):
-        self.points = [anchor1, control1, control2, anchor2]
+        self.points = [
+            anchor1.copy(),
+            control1.copy(),
+            control2.copy(),
+            anchor2.copy(),
+        ]
 
     def __init__(out self, anchor1: Self.Point, anchor2: Self.Point):
         var mag = anchor2 - anchor1
         var control1 = anchor1 + mag / 3.0
         var control2 = anchor2 - mag / 3.0
-        self.points = [anchor1, control1, control2, anchor2]
+        self.points = [anchor1.copy(), control1^, control2^, anchor2.copy()]
 
     def __init__(out self, var points: InlineArray[Self.Point, Self.size]):
-        self.points = points
+        self.points = points^
 
     def __imul__(mut self, other: Scalar[Self.dtype]):
         for ref point in self.points:
             point *= other
+
+    def __iadd__(mut self, other: SIMD[Self.dtype, Point.dim]):
+        for ref point in self.points:
+            point += other
 
     def min_x(self) -> Scalar[Self.dtype]:
         return SIMD[Self.dtype, 4](
@@ -168,6 +208,7 @@ def farin_rational_de_casteljau_split[
     comptime output_dtype = Scalar[dtype]
     var left = InlineArray[Point[dtype], size](uninitialized=True)
     var right = InlineArray[Point[dtype], size](uninitialized=True)
+    # TODO: We should just change DType to Floatable to avoid all of these casts.
     var split_index = 0
     # TODO: Is a copy the only way to handle this?
     var p_i_n = quad_bezier_curve.points.copy()
@@ -188,7 +229,58 @@ def farin_rational_de_casteljau_split[
     left[split_index] = p_i_n[0]
     right[size - split_index - 1] = p_i_n[0]
 
-    return (QuadBezierCurve(left), QuadBezierCurve(right))
+    return (QuadBezierCurve(left^), QuadBezierCurve(right^))
+
+
+def control_point_loss[dtype: DType](curve: QuadBezierCurve[dtype]) -> Float64:
+    ref ctrl_p1 = curve.points[1]
+    ref ctrl_p2 = curve.points[2]
+    var sub_curve = farin_rational_de_casteljau_between(curve, 0.25, 0.75)
+    ref p0 = sub_curve.points[0]
+    ref p3 = sub_curve.points[3]
+    var delta_pt = (ctrl_p1 - p0 + ctrl_p2 - p3) / 2
+    return Float64(abs(delta_pt.coords.unsafe_ptr().load().reduce_add())) / 3.0
+
+
+# def control_point_loss[dtype:DType](curve: QuadBezierCurve[dtype]) -> Float64:
+#     ref ctrl_p1 = curve.points[1]
+#     ref ctrl_p2 = curve.points[2]
+#     var sub_curve = farin_rational_de_casteljau_between(curve, 0.25, 0.75)
+#     ref p0 = sub_curve.points[0]
+#     ref p3 = sub_curve.points[3]
+#     var delta_pt = (ctrl_p1 - p0 + ctrl_p2 - p3) / 2
+#     return Float64(abs(delta_pt.coords.unsafe_ptr().load().reduce_add())) / 3.0
+
+
+def decompose_bezier_curve[
+    point_dtype: DType, dtype: DType, //
+](
+    mut points: List[Point[point_dtype]],
+    quad_bezier_curve: QuadBezierCurve[dtype],
+    tolerance: Float64 = 0.1,
+):
+    """Adaptively and recurvely split a list of curves into smller segments.
+
+    It will flatten curves until both control points are within `tolerance` of
+    the actual calculated curve.
+
+    See:
+    - https://agg.sourceforge.net/antigrain.com/research/adaptive_bezier/#toc0003
+    """
+    var loss = control_point_loss(quad_bezier_curve)
+
+    # TODO: Note that we should also consider angle loss.
+    # https://agg.sourceforge.net/antigrain.com/research/adaptive_bezier/#toc0003
+    # print('control point loss: ', loss)
+    if loss <= tolerance:
+        for point in quad_bezier_curve.points:
+            points.append(point.cast[point_dtype]())
+    else:
+        var left, right = farin_rational_de_casteljau_split(
+            quad_bezier_curve, 0.5
+        )
+        decompose_bezier_curve(points, left, tolerance)
+        decompose_bezier_curve(points, right, tolerance)
 
 
 def farin_rational_de_casteljau_between[
@@ -209,12 +301,12 @@ def farin_rational_de_casteljau_between[
 
     if a == 1:
         comptime for i in range(size):
-            p_i_n[i] = p_i_n[size - 1]
-        return QuadBezierCurve(p_i_n)
+            p_i_n[i] = p_i_n[size - 1].copy()
+        return QuadBezierCurve(p_i_n^)
     if b == 0:
         comptime for i in range(size):
-            p_i_n[i] = p_i_n[0]
-        return QuadBezierCurve(p_i_n)
+            p_i_n[i] = p_i_n[0].copy()
+        return QuadBezierCurve(p_i_n^)
     if a == 0 and b == 1:
         return quad_bezier_curve
 

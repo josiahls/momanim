@@ -77,6 +77,28 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
         self.color_space = ColorSpace.RGB_24
         self.io_backend_opaque_params = {}
 
+    def __init__(
+        out self,
+        w: UInt,
+        h: UInt,
+        ch: UInt,
+        var ptr: UnsafePointer[Scalar[Self.dtype], MutExternalOrigin],
+        size: Int,
+        color_space: ColorSpace,
+        line_size: UInt,
+    ) raises:
+        self.w = w
+        self.h = h
+        self.ch = ch
+        self.line_size = line_size
+        self._data = DataContainer(
+            ptr=ptr.unsafe_origin_cast[MutExternalOrigin](),
+            size=size,
+            copy=False,
+        )
+        self.color_space = color_space
+        self.io_backend_opaque_params = {}
+
     def numojo(mut self) raises -> nm.NDArray[Self.dtype]:
         var array = nm.NDArray[Self.dtype](
             shape=nm.NDArrayShape(Int(self.h), Int(self.w), Int(self.ch)),
