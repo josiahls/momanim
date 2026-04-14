@@ -1,4 +1,4 @@
-from std.math import atan2, atan, tan
+from std.math import atan2, atan, tan, sqrt
 from momanim.mobject.polygram import MObject
 from momanim.mobject.bezier_curve import (
     QuadBezierCurve,
@@ -35,30 +35,52 @@ struct Triangle[dtype: DType, dims: Int = 2, winding: Int = CW](
 
 def make_tri_quad[
     dtype: DType, dims: Int = 2, winding: Int = CW
-](p1: Point[dtype], p2: Point[dtype], thickness: Int) -> Tuple[
+](p1: Point[dtype], p2: Point[dtype], thickness: Float32) -> Tuple[
     Triangle[dtype, dims, winding], Triangle[dtype, dims, winding]
 ]:
     """Takes 2 points, and a with and creates a TriQuad centered along the
     line.
     """
     comptime assert dtype.is_floating_point()
-    var thickness_radius = Float32(thickness) / 2.0
+    var thickness_radius = thickness / 2.0
 
-    var h = p2 - p1
-    var denom = h.load().reduce_max() - h.load().reduce_min()
-    if denom == 0:
-        denom = 1.0
-    h = (h - h.load().reduce_min()) / denom
+    var dxy = p2.load[2]() - p1.load[2]()
+    var length = sqrt((dxy**2.0).reduce_add())
+    if length == 0:
+        length = 1.0
 
-    var h_perp = Point[dtype](h.load()[1], -h.load()[0])
-    print("h: ", h, "h_perp: ", h_perp)
+    # var denom = h.load[2]().reduce_max() - h.load[2]().reduce_min()
+    # if denom == 0:
+    #     denom = 1.0
+    # h = (h - h.load[2]().reduce_min()) / denom
 
-    var t1_a = p1 + h_perp * Scalar[dtype](thickness)
-    var t1_b = p1 - h_perp * Scalar[dtype](thickness)
-    var t2_a = p2 + h_perp * Scalar[dtype](thickness)
-    var t2_b = p2 - h_perp * Scalar[dtype](thickness)
+    var nx = dxy[1] / length
+    var ny = -dxy[0] / length
 
-    print("t1_a: ", t1_a, "t1_b: ", t1_b, "t2_a: ", t2_a, "t2_b: ", t2_b)
+    print(
+        "length: ",
+        length,
+        "dxy: ",
+        dxy,
+        "nx: ",
+        nx,
+        "ny: ",
+        ny,
+        "p1: ",
+        p1.load[2](),
+        "p2: ",
+        p2.load[2](),
+    )
+
+    var h_perp = Point[dtype](nx, ny)
+    # print("h: ", h, "h_perp: ", h_perp)
+
+    var t1_a = p1 + h_perp * Scalar[dtype](thickness_radius)
+    var t1_b = p1 - h_perp * Scalar[dtype](thickness_radius)
+    var t2_a = p2 + h_perp * Scalar[dtype](thickness_radius)
+    var t2_b = p2 - h_perp * Scalar[dtype](thickness_radius)
+
+    # print("t1_a: ", t1_a, "t1_b: ", t1_b, "t2_a: ", t2_a, "t2_b: ", t2_b)
 
     var t1 = Triangle[dtype, dims, winding](t1_a, t2_a, t1_b)
     var t2 = Triangle[dtype, dims, winding](t2_b, t1_b, t2_a)
@@ -109,7 +131,7 @@ def make_tri_quad[
 def tessellate_line[
     dtype: DType
 ](
-    curves: List[QuadBezierCurve[dtype]], thickness: Int, tolarence: Int = 1
+    curves: List[QuadBezierCurve[dtype]], thickness: Float32, tolarence: Int = 1
 ) raises -> List[Triangle[Float64.dtype]]:
     """Draws a ribbon of `TriQuad`s along a line whose width is `thickness`."""
     comptime assert dtype.is_floating_point()
@@ -148,20 +170,20 @@ def draw_stroke(
         denom = 1.0
     var h_norm = h / denom
     var n_steps = abs(h.load()).reduce_max() / abs(h_norm.load()).reduce_max()
-    print(
-        "(draw_stroke) start_point: ",
-        start_point.load[2](),
-        "end point: ",
-        p1.load[2](),
-        "h: ",
-        h.load[2](),
-        "denom: ",
-        denom,
-        "h_norm: ",
-        h_norm.load[2](),
-        "n_steps: ",
-        n_steps,
-    )
+    # print(
+    #     "(draw_stroke) start_point: ",
+    #     start_point.load[2](),
+    #     "end point: ",
+    #     p1.load[2](),
+    #     "h: ",
+    #     h.load[2](),
+    #     "denom: ",
+    #     denom,
+    #     "h_norm: ",
+    #     h_norm.load[2](),
+    #     "n_steps: ",
+    #     n_steps,
+    # )
     for _ in range(n_steps):
         var offset = Int(round(start_point.coords[1])) * row_stride + Int(
             round(start_point.coords[0])
@@ -186,3 +208,60 @@ def draw_triangle_strokes(
     draw_stroke(p1, p2, frame, row_stride, channels)
     draw_stroke(p2, p3, frame, row_stride, channels)
     draw_stroke(p3, p1, frame, row_stride, channels)
+
+
+def draw_triangle_fill(
+    triangle: Triangle[Float64.dtype],
+    frame: UnsafePointer[Scalar[DType.uint8], MutAnyOrigin],
+    row_stride: Int,
+    channels: Int,
+) -> None:
+    """Draws the fill of a triangle to a frame."""
+    var p1 = Point[Float64.dtype](triangle.points[0], triangle.points[1])
+    var p2 = Point[Float64.dtype](triangle.points[2], triangle.points[3])
+    var p3 = Point[Float64.dtype](triangle.points[4], triangle.points[5])
+
+    var v1 = p2 - p1
+    var v2 = p3 - p2
+    var v3 = p1 - p3
+
+    print("v1: ", v1.load[2](), "v2: ", v2.load[2](), "v3: ", v3.load[2]())
+
+    # NOTE: We add the extra p3.coords[0] to get power of 2.
+    # TODO: Should we use quads since those have 4 points / power of 2?
+    var min_x = SIMD[Float64.dtype, 4](
+        p1.coords[0], p2.coords[0], p3.coords[0], p3.coords[0]
+    ).reduce_min()
+    var max_x = SIMD[Float64.dtype, 4](
+        p1.coords[0], p2.coords[0], p3.coords[0], p3.coords[0]
+    ).reduce_max()
+    var min_y = SIMD[Float64.dtype, 4](
+        p1.coords[1], p2.coords[1], p3.coords[1], p3.coords[1]
+    ).reduce_min()
+    var max_y = SIMD[Float64.dtype, 4](
+        p1.coords[1], p2.coords[1], p3.coords[1], p3.coords[1]
+    ).reduce_max()
+
+    var imin_x = Int(round(min_x))
+    var imax_x = Int(round(max_x))
+    var imin_y = Int(round(min_y))
+    var imax_y = Int(round(max_y))
+
+    def is_point_in_triangle(
+        p: Point[Float64.dtype],
+        v: Point[Float64.dtype],
+        p1: Point[Float64.dtype],
+    ) -> Float64:
+        var i_j = (v.load[2]()).reversed() * SIMD[Float64.dtype, 2](1.0, -1.0)
+        var c = (i_j * p1.load[2]()).reduce_add() * -1.0
+        return (i_j * p.load[2]()).reduce_add() + c
+
+    for x in range(imin_x, imax_x + 1):
+        for y in range(imin_y, imax_y + 1):
+            var p = Point[Float64.dtype](Float64(x), Float64(y))
+
+            var dot1 = is_point_in_triangle(p, v1, p1)
+            var dot2 = is_point_in_triangle(p, v2, p2)
+            var dot3 = is_point_in_triangle(p, v3, p3)
+            if dot1 < 0.0 and dot2 < 0.0 and dot3 < 0.0:
+                frame.store(val=255, offset=y * row_stride + x)
