@@ -7,7 +7,7 @@ import numojo as nm
 struct VideoFrame[dtype: DType = DType.uint8](Copyable, Movable, Writable):
     var _data: DataContainer[Self.dtype]
 
-    fn __init__(
+    def __init__(
         out self,
         var ptr: UnsafePointer[Scalar[Self.dtype], MutExternalOrigin],
         size: Int,
@@ -39,7 +39,7 @@ struct Video[dtype: DType = DType.uint8](Copyable, Movable, Sized, Writable):
     var linesize: Int  # TODO: Why is this Int?
     """Bytes per row (row stride). Must match the underlying buffer layout."""
 
-    fn __init__(out self) raises:
+    def __init__(out self) raises:
         self.w = 0
         self.h = 0
         self.ch = 0
@@ -48,7 +48,7 @@ struct Video[dtype: DType = DType.uint8](Copyable, Movable, Sized, Writable):
         self.io_backend_opaque_params = {}
         self.linesize = 0
 
-    fn __init__(
+    def __init__(
         out self, w: UInt, h: UInt, ch: UInt, color_space: ColorSpace
     ) raises:
         self.w = w
@@ -59,7 +59,7 @@ struct Video[dtype: DType = DType.uint8](Copyable, Movable, Sized, Writable):
         self.io_backend_opaque_params = {}
         self.linesize = Int(w * ch)
 
-    fn __init__(out self, var elems: List[Scalar[Self.dtype]]) raises:
+    def __init__(out self, var elems: List[Scalar[Self.dtype]]) raises:
         self.w = UInt(len(elems))
         if len(elems) % 3 != 0:
             raise Error(
@@ -79,7 +79,7 @@ struct Video[dtype: DType = DType.uint8](Copyable, Movable, Sized, Writable):
         self.color_space = ColorSpace.RGB_24
         self.io_backend_opaque_params = {}
 
-    fn __init__(
+    def __init__(
         out self,
         var ptr: UnsafePointer[Scalar[Self.dtype], MutExternalOrigin],
         size: Int,
@@ -100,7 +100,7 @@ struct Video[dtype: DType = DType.uint8](Copyable, Movable, Sized, Writable):
         self.color_space = ColorSpace.RGB_24
         self.io_backend_opaque_params = {}
 
-    fn steal_frame(
+    def steal_frame(
         mut self,
         var frame_ptr: UnsafePointer[
             UnsafePointer[Scalar[Self.dtype], MutExternalOrigin],
@@ -114,17 +114,17 @@ struct Video[dtype: DType = DType.uint8](Copyable, Movable, Sized, Writable):
         var frame = VideoFrame[Self.dtype](frame_ptr[0], buf_size, copy=copy)
         self._frames.append(frame^)
 
-    fn frame(
+    def frame(
         ref self, frame_idx: Int
     ) -> ref[self._frames[frame_idx]] VideoFrame[Self.dtype]:
         return self._frames[frame_idx]
 
-    fn unsafe_ptr(
+    def unsafe_ptr(
         mut self, frame_idx: Int
     ) -> UnsafePointer[Scalar[Self.dtype], MutExternalOrigin]:
         return self._frames[frame_idx]._data.ptr
 
-    fn numojo(mut self, frame_idx: Int) raises -> nm.NDArray[Self.dtype]:
+    def numojo(mut self, frame_idx: Int) raises -> nm.NDArray[Self.dtype]:
         var row_stride = self.linesize
         var array = nm.NDArray[Self.dtype](
             shape=nm.NDArrayShape(Int(self.h), Int(self.w), Int(self.ch)),
@@ -135,5 +135,5 @@ struct Video[dtype: DType = DType.uint8](Copyable, Movable, Sized, Writable):
         )
         return array^
 
-    fn __len__(self) -> Int:
+    def __len__(self) -> Int:
         return len(self._frames)
