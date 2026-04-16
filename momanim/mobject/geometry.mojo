@@ -142,6 +142,15 @@ struct Triangle2d(Copyable, Writable):
 
 
 @fieldwise_init
+struct Trapezoid2d(Copyable, Writable):
+    var t1: Triangle2d
+    var t2: Triangle2d
+
+    def __contains__(self, p: Point2d) -> Bool:
+        return p in self.t1 or p in self.t2
+
+
+@fieldwise_init
 struct Vector3d(Copyable, Writable):
     var p1: Point3d
     var p2: Point3d
