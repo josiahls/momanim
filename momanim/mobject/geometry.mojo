@@ -5,7 +5,7 @@ All pimitives are `size ** 2` for SIMD compat.
 
 
 @fieldwise_init
-struct Point2d(Copyable, Writable):
+struct Point2d(Copyable, Equatable, Writable):
     var x: Float32
     var y: Float32
 
@@ -58,8 +58,8 @@ struct Vector2d(Copyable, Writable):
 
 
 struct HalfPlane2d(Copyable, Writable):
-    var i: Float32
-    var j: Float32
+    var v: Vector2d
+    var ij: Point2d  # NOTE: Should this actually be a 2d point?
     var c: Float32
 
     def __init__(out self, v: Vector2d):
@@ -104,34 +104,44 @@ struct HalfPlane2d(Copyable, Writable):
         we could then do this for the other 3 lines to determine if any point
         is inside the square.
         """
+        self.v = v.copy()
         var mag = v.magnitude()
-        var ij = mag.reversed() * Point2d(1.0, -1.0)
-        self.c = (ij * v.p1).sum() * -1.0
-        self.i = ij.simd()[0]
-        self.j = ij.simd()[1]
-
-    def ij(self) -> SIMD[Float32.dtype, 2]:
-        return SIMD[Float32.dtype, 2](self.i, self.j)
+        self.ij = mag.reversed() * Point2d(1.0, -1.0)
+        self.c = (self.ij * v.p1).sum() * -1.0
 
     def point_relative_to_plane(self, p: Point2d) -> Float32:
-        return (self.ij() * p.simd()).reduce_add() + self.c
+        return (self.ij * p).sum() + self.c
+
+
+@fieldwise_init
+struct Triangle2d(Copyable, Writable):
+    """A 2d triable composed of 3 half planes.
+
+    These half planes have the original vector, and the half plane for bounds
+    checking.
+    """
+
+    var v1: HalfPlane2d
+    var v2: HalfPlane2d
+    var v3: HalfPlane2d
+
+    def __init__(out self, var p1: Point2d, var p2: Point2d, var p3: Point2d):
+        self.v1 = {Vector2d(p1.copy(), p2.copy())}
+        self.v2 = {Vector2d(p2^, p3.copy())}
+        self.v3 = {Vector2d(p3^, p1^)}
+
+    def __contains__(self, p: Point2d) -> Bool:
+        # TODO: Is there a better simd method here?
+
+        # NOTE: Must be counter clockwise order!
+        return (
+            self.v1.point_relative_to_plane(p) <= 0.0
+            and self.v2.point_relative_to_plane(p) <= 0.0
+            and self.v3.point_relative_to_plane(p) <= 0.0
+        )
 
 
 @fieldwise_init
 struct Vector3d(Copyable, Writable):
     var p1: Point3d
     var p2: Point3d
-
-
-@fieldwise_init
-struct Plane2d(Copyable, Writable):
-    var v1: Vector2d
-    var v2: Vector2d
-    var normal: Vector2d
-
-
-@fieldwise_init
-struct Plane3d(Copyable, Writable):
-    var v1: Vector3d
-    var v2: Vector3d
-    var normal: Vector3d
