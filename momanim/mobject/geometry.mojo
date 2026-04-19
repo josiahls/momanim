@@ -14,6 +14,11 @@ struct Point2d(Comparable, Copyable, Floorable, Writable):
         self.x = simd[0]
         self.y = simd[1]
 
+    def __init__(out self, *, cast_x: Float64, cast_y: Float64):
+        # TODO: We probably don't want to support this implcitly.
+        self.x = Float32(cast_x)
+        self.y = Float32(cast_y)
+
     def simd(self) -> SIMD[Float32.dtype, 2]:
         return SIMD[Float32.dtype, 2](self.x, self.y)
 
@@ -62,6 +67,9 @@ struct Vector2d(Copyable, Writable):
 
     def magnitude(self) -> Point2d:
         return self.p2 - self.p1
+
+    def swap(self) -> Self:
+        return {self.p2.copy(), self.p1.copy()}
 
 
 struct HalfPlane2d(Copyable, Writable):
