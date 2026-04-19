@@ -22,7 +22,7 @@ from mav.ffmpeg.avutil.pixfmt import AVColorRange, AVColorSpace
 from mav.ffmpeg.swscale.swscale import SwsContext
 from momanim.io_backends.mav.utils import convert_format
 
-from momanim.data_structs.image import Image
+from momanim.io_backends.image import Image
 from momanim.constants import ColorSpace
 
 comptime _logger = Logger[level=DEFAULT_LEVEL]()
