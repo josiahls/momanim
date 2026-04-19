@@ -157,11 +157,31 @@ def _draw_vector[
     comptime assert T.is_integral()
     comptime assert T.is_unsigned()
     comptime UIntT = Scalar[T]
+
+    var step_method = 0  # 0 for x, 1 for y
+
+    var x_inc: Float32 = 1
+    var y_inc: Float32 = 1
+
+    var mirrored = False
+    if v.p2.x < v.p1.x:
+        mirrored = True
+        x_inc *= -1
+    if v.p2.y < v.p1.y:
+        y_inc *= -1
+
     # NOTE: We's algorithm assumes the points are adjacent e.g. 0 <= k <= 1.
     var mag = v.magnitude()
-    var k = mag.y / mag.x
-    assert k <= 1
-    assert k >= 0
+    var k = abs(mag.y / mag.x)
+    if k > 1:
+        step_method = 1
+        k = abs(mag.x / mag.y)
+        if v.p2.y < v.p1.y:
+            mirrored = True
+    assert k <= 1, "k must be less than or equal to 1 got: {}".format(k)
+    assert k >= 0, "k must be greater than or equal to 0 got: {}".format(k)
+
+    # print('k: ', k, 'x_inc: ', x_inc, 'y_inc: ', y_inc)
     # how do I select the int dtype needed for this?
     var D: UIntT = 0
     var new_D: UIntT
@@ -182,84 +202,127 @@ def _draw_vector[
         """Scales a grayscale color by an 8-bit coverage."""
         var scaled = (SIMD[T, color_width](color) * SIMD[T, 1](coverage)) >> m
         # print("scaled: ", scaled, "color: ", color, "coverage: ", coverage)
+
+        # print('scaled color: ', scaled, 'color: ', color, 'coverage: ', coverage)
         return SIMD[UInt8.dtype, color_width](scaled)
 
     draw_point(v.p1, ptr, color, linesize, w, h)
     draw_point(v.p2, ptr, color, linesize, w, h)
-    while x0 <= x1:
-        x0 += 1
-        x1 -= 1
+    while (
+        step_method == 0
+        and ((not mirrored and x0 <= x1) or (mirrored and x0 >= x1))
+    ) or (
+        step_method == 1
+        and ((not mirrored and y0 <= y1) or (mirrored and y0 >= y1))
+    ):
+        if step_method == 0:
+            x0 += x_inc
+            x1 -= x_inc
+        else:
+            y0 += y_inc
+            y1 -= y_inc
 
         if k == 1:
-            y0 += 1
-            y1 -= 1
+            if step_method == 0:
+                y0 += y_inc
+                y1 -= y_inc
+            else:
+                x0 += x_inc
+                x1 -= x_inc
 
-            draw_point(
-                {x0, y0},
-                ptr,
-                color,
-                linesize,
-                w,
-                h,
-            )
-            draw_point(
-                {x1, y1},
-                ptr,
-                color,
-                linesize,
-                w,
-                h,
-            )
+            draw_point({x0, y0}, ptr, color, linesize, w, h)
+            draw_point({x1, y1}, ptr, color, linesize, w, h)
             continue
 
         new_D = D + d
         if new_D < D:
-            y0 += 1
-            y1 -= 1
+            if step_method == 0:
+                y0 += y_inc
+                y1 -= y_inc
+            else:
+                x0 += x_inc
+                x1 -= x_inc
         D = new_D
 
-        var coverage = UInt8(D >> UIntT(n - m))
-        var inverse_coverage = UInt8((2**m) - 1) - coverage
+        var coverage: UInt8 = UInt8(D >> UIntT(n - m))
+        var inverse_coverage: UInt8 = UInt8((2**m) - 1) - coverage
 
         # print("coverage: ", coverage, "inverse_coverage: ", inverse_coverage)
 
-        # print("x0: ", x0, "y0: ", y0, "x1: ", x1, "y1: ", y1)
+        # print("x0: ", x0, "y0: ", y0, "x1: ", x1, "y1: ", y1, "mirrored: ", mirrored)
 
         # print("draw pont 1")
-        draw_point(
-            {x0, y0},
-            ptr,
-            _scale_coverage(color, inverse_coverage),
-            linesize,
-            w,
-            h,
-        )
-        # print("draw pont 2")
-        draw_point(
-            {x1, y1},
-            ptr,
-            _scale_coverage(color, inverse_coverage),
-            linesize,
-            w,
-            h,
-        )
-        # print("draw pont 3")
-        draw_point(
-            {x0, y0 + 1},
-            ptr,
-            _scale_coverage(color, coverage),
-            linesize,
-            w,
-            h,
-        )
-        # print("draw pont 4")
-        draw_point(
-            {x1, y1 - 1},
-            ptr,
-            _scale_coverage(color, coverage),
-            linesize,
-            w,
-            h,
-        )
+        if step_method == 0:
+            draw_point(
+                {x0, y0},
+                ptr,
+                _scale_coverage(color, inverse_coverage),
+                linesize,
+                w,
+                h,
+            )
+            # print("draw pont 2")
+            draw_point(
+                {x1, y1},
+                ptr,
+                _scale_coverage(color, inverse_coverage),
+                linesize,
+                w,
+                h,
+            )
+            # print("draw pont 3")
+            draw_point(
+                {x0, y0 + y_inc},
+                ptr,
+                _scale_coverage(color, coverage),
+                linesize,
+                w,
+                h,
+            )
+            # print("draw pont 4")
+            draw_point(
+                {x1, y1 - y_inc},
+                ptr,
+                _scale_coverage(color, coverage),
+                linesize,
+                w,
+                h,
+            )
+        else:
+            draw_point(
+                {x0, y0},
+                ptr,
+                _scale_coverage(color, inverse_coverage),
+                linesize,
+                w,
+                h,
+            )
+            # print("draw pont 2")
+            draw_point(
+                {x1, y1},
+                ptr,
+                _scale_coverage(color, inverse_coverage),
+                linesize,
+                w,
+                h,
+            )
+            # print("draw pont 3")
+            draw_point(
+                {x0 + x_inc, y0},
+                ptr,
+                _scale_coverage(color, coverage),
+                linesize,
+                w,
+                h,
+            )
+            # print("draw pont 4")
+            draw_point(
+                {x1 - x_inc, y1},
+                ptr,
+                _scale_coverage(color, coverage),
+                linesize,
+                w,
+                h,
+            )
 
         # print("D: ", D, "new_D: ", new_D, "coverage: ", coverage)

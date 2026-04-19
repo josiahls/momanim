@@ -55,23 +55,27 @@ def test_draw_vector() raises:
 
     var frame = alloc[Scalar[DType.uint8]](w * h * 1)
 
+    var v1 = Vector2d(Point2d(25.0, 25.0), Point2d(49.0, 48.0))
+    draw_vector(v1, frame, Scalar[UInt8.dtype](255),w, w, h)
+    var v2 = Vector2d(Point2d(25.0, 25.0), Point2d(49.0, 26.0))
+    draw_vector(v2, frame, Scalar[UInt8.dtype](255),w, w, h)
+    var v3 = Vector2d(Point2d(25.0, 25.0), Point2d(27.0, 0.0))
+    draw_vector(v3, frame, Scalar[UInt8.dtype](255),w, w, h)
+    var v4 = Vector2d(Point2d(25.0, 25.0), Point2d(49.0, 24.0))
+    draw_vector(v3, frame, Scalar[UInt8.dtype](255),w, w, h)
+    var v5 = Vector2d(Point2d(25.0, 25.0), Point2d(24.0, 49.0))
+    draw_vector(v5, frame, Scalar[UInt8.dtype](255),w, w, h)
+    var v6 = Vector2d(Point2d(25.0, 25.0), Point2d(48.0, 0.0))
+    draw_vector(v6, frame, Scalar[UInt8.dtype](255),w, w, h)
 
-    var p1 = Point2d(0.0, 0.0)
-    # var p2 = Point2d(49.0, 25.0)
-
-    var p2 = Point2d(49.0, 48.0)
-
-    var v1 = Vector2d(p1.copy(), p2.copy())
-
-    draw_vector(
-        v1, 
-        frame, 
-        Scalar[UInt8.dtype](255),
-        # WHITE, 
-        w, 
-        w, 
-        h
-    )
+    var v7 = Vector2d(Point2d(25.0, 25.0), Point2d(24.0, 0.0))
+    draw_vector(v7, frame, Scalar[UInt8.dtype](255),w, w, h)
+    var v8 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 1.0))
+    draw_vector(v8, frame, Scalar[UInt8.dtype](255),w, w, h)
+    var v9 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 24.0))
+    draw_vector(v9, frame, Scalar[UInt8.dtype](255),w, w, h)
+    var v10 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 48.0))
+    draw_vector(v10, frame, Scalar[UInt8.dtype](255),w, w, h)
 
     var image = Image(
         w=w, h=h, ch=1,

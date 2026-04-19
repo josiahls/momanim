@@ -63,6 +63,9 @@ struct Vector2d(Copyable, Writable):
     def magnitude(self) -> Point2d:
         return self.p2 - self.p1
 
+    def swap(self) -> Self:
+        return {self.p2.copy(), self.p1.copy()}
+
 
 struct HalfPlane2d(Copyable, Writable):
     var v: Vector2d
