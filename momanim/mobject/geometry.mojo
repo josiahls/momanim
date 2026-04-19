@@ -2,10 +2,11 @@
 
 All pimitives are `size ** 2` for SIMD compat.
 """
+from std.math import Floorable, floor
 
 
 @fieldwise_init
-struct Point2d(Copyable, Equatable, Writable):
+struct Point2d(Comparable, Copyable, Floorable, Writable):
     var x: Float32
     var y: Float32
 
@@ -27,6 +28,12 @@ struct Point2d(Copyable, Equatable, Writable):
 
     def sum(self) -> Float32:
         return self.simd().reduce_add()
+
+    def __floor__(self) -> Self:
+        return {floor(self.simd())}
+
+    def __lt__(self, other: Self) -> Bool:
+        return self.simd().reduce_max() < other.simd().reduce_min()
 
 
 struct Point3d(Copyable, Writable):
@@ -64,6 +71,8 @@ struct HalfPlane2d(Copyable, Writable):
 
     def __init__(out self, v: Vector2d):
         """Calculates a halfplane (hyper plane) from a 2d vector.
+
+        Reference: https://mathworld.wolfram.com/CrossProduct.html
 
         Given `v`: (0,4) -> (8,12)
         and Given:
