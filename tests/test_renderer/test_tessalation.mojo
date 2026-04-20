@@ -48,34 +48,50 @@ from momanim.utils.color import WHITE
 #     )
 #     image_write(image, Path("test_tessalation.png"))
 
-
-def test_draw_vector() raises:
+def test_draw_vector_perfect_angles() raises:
     var w = 50
     var h = 50
 
     var frame = alloc[Scalar[DType.uint8]](w * h * 1)
 
-    var v1 = Vector2d(Point2d(25.0, 25.0), Point2d(49.0, 48.0))
-    draw_vector(v1, frame, Scalar[UInt8.dtype](255),w, w, h)
-    var v2 = Vector2d(Point2d(25.0, 25.0), Point2d(49.0, 26.0))
-    draw_vector(v2, frame, Scalar[UInt8.dtype](255),w, w, h)
-    var v3 = Vector2d(Point2d(25.0, 25.0), Point2d(27.0, 0.0))
-    draw_vector(v3, frame, Scalar[UInt8.dtype](255),w, w, h)
-    var v4 = Vector2d(Point2d(25.0, 25.0), Point2d(49.0, 24.0))
-    draw_vector(v3, frame, Scalar[UInt8.dtype](255),w, w, h)
-    var v5 = Vector2d(Point2d(25.0, 25.0), Point2d(24.0, 49.0))
-    draw_vector(v5, frame, Scalar[UInt8.dtype](255),w, w, h)
-    var v6 = Vector2d(Point2d(25.0, 25.0), Point2d(48.0, 0.0))
-    draw_vector(v6, frame, Scalar[UInt8.dtype](255),w, w, h)
+    var p2s = [
+        ((25.0, 25.0), (49.0, 49.0)),
+        ((25.0, 25.0), (49.0, 25.0)),
+        ((25.0, 24.0), (49.0, 0.0)),
+        ((25.0, 24.0), (25.0, 0.0)),
+        ((24.0, 24.0), (0.0, 0.0)),
+        ((24.0, 24.0), (0.0, 24.0)),
+        ((24.0, 25.0), (0.0, 49.0)),
+        ((24.0, 25.0), (24.0, 49.0)),
+    ]
+    for vec in p2s:
+        var v = Vector2d(
+            p1=Point2d(cast_x=vec[0][0], cast_y=vec[0][1]),
+            p2=Point2d(cast_x=vec[1][0], cast_y=vec[1][1]),
+        )
+        draw_vector(v, frame, Scalar[UInt8.dtype](255),w, w, h)
 
-    var v7 = Vector2d(Point2d(25.0, 25.0), Point2d(24.0, 0.0))
-    draw_vector(v7, frame, Scalar[UInt8.dtype](255),w, w, h)
-    var v8 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 1.0))
-    draw_vector(v8, frame, Scalar[UInt8.dtype](255),w, w, h)
-    var v9 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 24.0))
-    draw_vector(v9, frame, Scalar[UInt8.dtype](255),w, w, h)
-    var v10 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 48.0))
-    draw_vector(v10, frame, Scalar[UInt8.dtype](255),w, w, h)
+    # var v1 = Vector2d(Point2d(25.0, 25.0), Point2d(49.0, 49.0))
+    # draw_vector(v1, frame, Scalar[UInt8.dtype](255),w, w, h)
+    # var v2 = Vector2d(Point2d(25.0, 25.0), Point2d(49.0, 25.0))
+    # draw_vector(v2, frame, Scalar[UInt8.dtype](255),w, w, h)
+    # var v3 = Vector2d(Point2d(25.0, 25.0), Point2d(49.0, 0.0))
+    # draw_vector(v3, frame, Scalar[UInt8.dtype](255),w, w, h)
+    # var v4 = Vector2d(Point2d(25.0, 25.0), Point2d(25.0, 49.0))
+    # draw_vector(v3, frame, Scalar[UInt8.dtype](255),w, w, h)
+    # var v5 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 49.0))
+    # draw_vector(v5, frame, Scalar[UInt8.dtype](255),w, w, h)
+    # var v6 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 25.0))
+    # draw_vector(v6, frame, Scalar[UInt8.dtype](255),w, w, h)
+
+    # var v7 = Vector2d(Point2d(25.0, 25.0), Point2d(24.0, 0.0))
+    # draw_vector(v7, frame, Scalar[UInt8.dtype](255),w, w, h)
+    # var v8 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 1.0))
+    # draw_vector(v8, frame, Scalar[UInt8.dtype](255),w, w, h)
+    # var v9 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 24.0))
+    # draw_vector(v9, frame, Scalar[UInt8.dtype](255),w, w, h)
+    # var v10 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 48.0))
+    # draw_vector(v10, frame, Scalar[UInt8.dtype](255),w, w, h)
 
     var image = Image(
         w=w, h=h, ch=1,
@@ -83,7 +99,39 @@ def test_draw_vector() raises:
         color_space=ColorSpace.GREY_8, 
         line_size=w
     )
-    image_write(image, Path("test_data/test_renderer/test_draw_vector.png"))
+    image_write(image, Path("test_data/test_renderer/test_draw_vector_perfect_angles.png"))
+
+
+def test_draw_vector_imperfect_angles() raises:
+    var w = 50
+    var h = 50
+
+    var frame = alloc[Scalar[DType.uint8]](w * h * 1)
+
+    var p2s = [
+        ((25.0, 25.0), (37.0, 49.0)),
+        ((25.0, 25.0), (49.0, 37.0)),
+        ((25.0, 24.0), (37.0, 0.0)),
+        ((25.0, 24.0), (49.0, 12.0)),
+        ((24.0, 24.0), (12.0, 0.0)),
+        ((24.0, 24.0), (0.0, 12.0)),
+        ((24.0, 25.0), (0.0, 37.0)),
+        ((24.0, 25.0), (12.0, 49.0)),
+    ]
+    for vec in p2s:
+        var v = Vector2d(
+            p1=Point2d(cast_x=vec[0][0], cast_y=vec[0][1]),
+            p2=Point2d(cast_x=vec[1][0], cast_y=vec[1][1]),
+        )
+        draw_vector(v, frame, Scalar[UInt8.dtype](255),w, w, h)
+
+    var image = Image(
+        w=w, h=h, ch=1,
+        ptr=frame, size=w * h * 1, 
+        color_space=ColorSpace.GREY_8, 
+        line_size=w
+    )
+    image_write(image, Path("test_data/test_renderer/test_draw_vector_imperfect_angles.png"))
 
 
 
@@ -136,4 +184,5 @@ def test_draw_vector() raises:
 
 def main() raises:
     # TestSuite.discover_tests[__functions_in_module()]().run()
-    test_draw_vector()
+    test_draw_vector_perfect_angles()
+    test_draw_vector_imperfect_angles()

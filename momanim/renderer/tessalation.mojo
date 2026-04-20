@@ -175,11 +175,25 @@ def _draw_vector[
     var k = abs(mag.y / mag.x)
     if k > 1:
         step_method = 1
+        mirrored = False
         k = abs(mag.x / mag.y)
         if v.p2.y < v.p1.y:
             mirrored = True
     assert k <= 1, "k must be less than or equal to 1 got: {}".format(k)
     assert k >= 0, "k must be greater than or equal to 0 got: {}".format(k)
+
+    print(
+        "k: ",
+        k,
+        "x_inc: ",
+        x_inc,
+        "y_inc: ",
+        y_inc,
+        "step_method: ",
+        step_method,
+        "mirrored: ",
+        mirrored,
+    )
 
     # print('k: ', k, 'x_inc: ', x_inc, 'y_inc: ', y_inc)
     # how do I select the int dtype needed for this?
@@ -192,7 +206,7 @@ def _draw_vector[
     var x1 = v.p2.x
     var y0 = v.p1.y
     var y1 = v.p2.y
-    # print("init: x0: ", x0, "y0: ", y0, "x1: ", x1, "y1: ", y1)
+    print("init: x0: ", x0, "y0: ", y0, "x1: ", x1, "y1: ", y1)
 
     def _scale_coverage(
         # TODO: change to color width

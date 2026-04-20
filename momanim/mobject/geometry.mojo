@@ -14,6 +14,11 @@ struct Point2d(Comparable, Copyable, Floorable, Writable):
         self.x = simd[0]
         self.y = simd[1]
 
+    def __init__(out self, *, cast_x: Float64, cast_y: Float64):
+        # TODO: We probably don't want to support this implcitly.
+        self.x = Float32(cast_x)
+        self.y = Float32(cast_y)
+
     def simd(self) -> SIMD[Float32.dtype, 2]:
         return SIMD[Float32.dtype, 2](self.x, self.y)
 
