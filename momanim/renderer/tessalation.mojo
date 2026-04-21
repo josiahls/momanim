@@ -42,6 +42,11 @@ struct CartessianPoint2d(Copyable, Writable):
         self.indep = indep
         self.dep_axis = dep_axis
 
+    def __init__(out self, p: Self):
+        self.dep = p.dep
+        self.indep = p.indep
+        self.dep_axis = p.dep_axis
+
     def __sub__(self, other: Self) -> Self:
         assert (
             self.dep_axis == other.dep_axis
@@ -57,9 +62,9 @@ struct CartessianPoint2d(Copyable, Writable):
 
     def to_point2d(self) -> Point2d:
         if self.dep_axis == Self.X_AXIS:
-            return Point2d(self.indep, self.dep)
-        else:
             return Point2d(self.dep, self.indep)
+        else:
+            return Point2d(self.indep, self.dep)
 
 
 struct CartessianVector2d(Copyable, Writable):
@@ -177,40 +182,16 @@ struct Tessalator:
         comptime assert T.is_unsigned()
         comptime UIntT = Scalar[T]
         var cartessian_v = CartessianVector2d(v)
-        ref p1 = v.p1
-        ref p2 = v.p2
 
-        var direct_axis_0: Float32 = p1.x
-        var direct_axis_1: Float32 = p2.x
-
-        var depend_axis_0: Float32 = p1.y
-        var depend_axis_1: Float32 = p2.y
-
-        var direct_inc: Float32 = 1
-        var depend_inc: Float32 = 1
-        var swapped_axis: Bool = False
         var mag = cartessian_v.magnitude()
-        var k: Float32
         if abs(mag.dep) > abs(mag.indep):
-            swapped_axis = True
             cartessian_v.swap_axis()
             mag.swap_axis()
-            direct_axis_0 = p1.y
-            direct_axis_1 = p2.y
 
-            depend_axis_0 = p1.x
-            depend_axis_1 = p2.x
+        var k: Float32 = abs(mag.dep / mag.indep)
 
-        k = abs(mag.dep / mag.indep)
-
-        if mag.indep < 0:
-            direct_inc *= -1
-            # TODO: Do we need to also swap the depend axis?
-
-        if mag.dep < 0:
-            depend_inc *= -1
-            # TODO: Do we need to also swap the direct axis?
-
+        var direct_inc = Float32(-1.0 if mag.indep < 0 else 1.0)
+        var depend_inc = Float32(-1.0 if mag.dep < 0 else 1.0)
         assert k <= 1, "k must be less than or equal to 1 got: {}".format(k)
         assert k >= 0, "k must be greater than or equal to 0 got: {}".format(k)
 
@@ -229,35 +210,32 @@ struct Tessalator:
             var scaled = (SIMD[T, 1](color) * SIMD[T, 1](coverage)) >> m
             return SIMD[UInt8.dtype, 1](scaled)
 
-        self.draw_point[1](v.p1, 255)
-        self.draw_point[1](v.p2, 255)
+        self.draw_point[1](cartessian_v.p1.to_point2d(), 255)
+        self.draw_point[1](cartessian_v.p2.to_point2d(), 255)
         while (
-            direct_axis_0
-            <= direct_axis_1 if direct_inc
-            > 0 else direct_axis_0
-            >= direct_axis_1
+            cartessian_v.p1.indep
+            <= cartessian_v.p2.indep if direct_inc
+            > 0 else cartessian_v.p1.indep
+            >= cartessian_v.p2.indep
         ):
-            direct_axis_0 += direct_inc
-            direct_axis_1 -= direct_inc
+            cartessian_v.p1.indep += direct_inc
+            cartessian_v.p2.indep -= direct_inc
 
             if k != 1:
                 new_D = D + d
                 inc_depend_axis = new_D < D
                 D = new_D
             if inc_depend_axis:
-                depend_axis_0 += depend_inc
-                depend_axis_1 -= depend_inc
-
-            var p0 = Point2d(direct_axis_0, depend_axis_0)
-            var p1 = Point2d(direct_axis_1, depend_axis_1)
-
-            if swapped_axis:
-                p0 = Point2d(depend_axis_0, direct_axis_0)
-                p1 = Point2d(depend_axis_1, direct_axis_1)
+                cartessian_v.p1.dep += depend_inc
+                cartessian_v.p2.dep -= depend_inc
 
             if k == 1:
-                self.draw_point(p0, SIMD[UInt8.dtype, 1](255))
-                self.draw_point(p1, SIMD[UInt8.dtype, 1](255))
+                self.draw_point(
+                    cartessian_v.p1.to_point2d(), SIMD[UInt8.dtype, 1](255)
+                )
+                self.draw_point(
+                    cartessian_v.p2.to_point2d(), SIMD[UInt8.dtype, 1](255)
+                )
                 continue
 
             var coverage: UInt8 = UInt8(
@@ -267,22 +245,24 @@ struct Tessalator:
                 UInt8((2**self.gray_scales) - 1) - coverage
             )
 
-            var p0_offset = Point2d(direct_axis_0, depend_axis_0 + depend_inc)
-            var p1_offset = Point2d(direct_axis_1, depend_axis_1 - depend_inc)
-
-            if swapped_axis:
-                p0_offset = Point2d(depend_axis_0 + depend_inc, direct_axis_0)
-                p1_offset = Point2d(depend_axis_1 - depend_inc, direct_axis_1)
+            var p1_offset = CartessianPoint2d(cartessian_v.p1)
+            p1_offset.dep += depend_inc
+            var p2_offset = CartessianPoint2d(cartessian_v.p2)
+            p2_offset.dep -= depend_inc
 
             self.draw_point(
-                p0, _scale_coverage[self.gray_scales](255, inverse_coverage)
+                cartessian_v.p1.to_point2d(),
+                _scale_coverage[self.gray_scales](255, inverse_coverage),
             )
             self.draw_point(
-                p1, _scale_coverage[self.gray_scales](255, inverse_coverage)
+                cartessian_v.p2.to_point2d(),
+                _scale_coverage[self.gray_scales](255, inverse_coverage),
             )
             self.draw_point(
-                p0_offset, _scale_coverage[self.gray_scales](255, coverage)
+                p1_offset.to_point2d(),
+                _scale_coverage[self.gray_scales](255, coverage),
             )
             self.draw_point(
-                p1_offset, _scale_coverage[self.gray_scales](255, coverage)
+                p2_offset.to_point2d(),
+                _scale_coverage[self.gray_scales](255, coverage),
             )
