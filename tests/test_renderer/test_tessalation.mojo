@@ -6,10 +6,12 @@ from momanim.io_backends.mav.image_write import image_write
 # from momanim.renderer.tessalation import tessellate_line, draw_triangle_strokes, draw_triangle_fill, Triangle
 # from momanim.typing import Vector3D
 from momanim.mobject.geometry import Point2d, Triangle2d, Trapezoid2d, Vector2d
-from momanim.renderer.tessalation import draw_vector
+from momanim.renderer.tessalation import Tessalator
 from std.pathlib import Path
 from std.testing import TestSuite
 from momanim.utils.color import WHITE
+from std.time import perf_counter_ns, time_function
+from std.memory import memset_zero
 
 # def test_tessalation() raises:
 
@@ -48,50 +50,31 @@ from momanim.utils.color import WHITE
 #     )
 #     image_write(image, Path("test_tessalation.png"))
 
-def test_draw_vector_perfect_angles() raises:
+def test_draw_vector_perfect_angles() capturing raises:
     var w = 50
     var h = 50
 
     var frame = alloc[Scalar[DType.uint8]](w * h * 1)
+    memset_zero(frame, w * h * 1)
+    var tessalator = Tessalator(frame, w, w, h)
 
     var p2s = [
         ((25.0, 25.0), (49.0, 49.0)),
-        ((25.0, 25.0), (49.0, 25.0)),
+        ((25.0, 25.0), (49.0, 25.0)), # vert
         ((25.0, 24.0), (49.0, 0.0)),
-        ((25.0, 24.0), (25.0, 0.0)),
+        ((25.0, 24.0), (25.0, 0.0)), # horz
         ((24.0, 24.0), (0.0, 0.0)),
-        ((24.0, 24.0), (0.0, 24.0)),
+        ((24.0, 24.0), (0.0, 24.0)), # horz
         ((24.0, 25.0), (0.0, 49.0)),
-        ((24.0, 25.0), (24.0, 49.0)),
+        ((24.0, 25.0), (24.0, 49.0)), # vert
     ]
     for vec in p2s:
         var v = Vector2d(
             p1=Point2d(cast_x=vec[0][0], cast_y=vec[0][1]),
             p2=Point2d(cast_x=vec[1][0], cast_y=vec[1][1]),
         )
-        draw_vector(v, frame, Scalar[UInt8.dtype](255),w, w, h)
-
-    # var v1 = Vector2d(Point2d(25.0, 25.0), Point2d(49.0, 49.0))
-    # draw_vector(v1, frame, Scalar[UInt8.dtype](255),w, w, h)
-    # var v2 = Vector2d(Point2d(25.0, 25.0), Point2d(49.0, 25.0))
-    # draw_vector(v2, frame, Scalar[UInt8.dtype](255),w, w, h)
-    # var v3 = Vector2d(Point2d(25.0, 25.0), Point2d(49.0, 0.0))
-    # draw_vector(v3, frame, Scalar[UInt8.dtype](255),w, w, h)
-    # var v4 = Vector2d(Point2d(25.0, 25.0), Point2d(25.0, 49.0))
-    # draw_vector(v3, frame, Scalar[UInt8.dtype](255),w, w, h)
-    # var v5 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 49.0))
-    # draw_vector(v5, frame, Scalar[UInt8.dtype](255),w, w, h)
-    # var v6 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 25.0))
-    # draw_vector(v6, frame, Scalar[UInt8.dtype](255),w, w, h)
-
-    # var v7 = Vector2d(Point2d(25.0, 25.0), Point2d(24.0, 0.0))
-    # draw_vector(v7, frame, Scalar[UInt8.dtype](255),w, w, h)
-    # var v8 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 1.0))
-    # draw_vector(v8, frame, Scalar[UInt8.dtype](255),w, w, h)
-    # var v9 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 24.0))
-    # draw_vector(v9, frame, Scalar[UInt8.dtype](255),w, w, h)
-    # var v10 = Vector2d(Point2d(25.0, 25.0), Point2d(0.0, 48.0))
-    # draw_vector(v10, frame, Scalar[UInt8.dtype](255),w, w, h)
+        tessalator.draw_vector(v, Scalar[UInt8.dtype](255))
+    tessalator.commit()
 
     var image = Image(
         w=w, h=h, ch=1,
@@ -102,11 +85,14 @@ def test_draw_vector_perfect_angles() raises:
     image_write(image, Path("test_data/test_renderer/test_draw_vector_perfect_angles.png"))
 
 
-def test_draw_vector_imperfect_angles() raises:
+def test_draw_vector_imperfect_angles() capturing raises:
     var w = 50
     var h = 50
 
     var frame = alloc[Scalar[DType.uint8]](w * h * 1)
+    memset_zero(frame, w * h * 1)
+
+    var tessalator = Tessalator(frame, w, w, h)
 
     var p2s = [
         ((25.0, 25.0), (37.0, 49.0)),
@@ -123,7 +109,8 @@ def test_draw_vector_imperfect_angles() raises:
             p1=Point2d(cast_x=vec[0][0], cast_y=vec[0][1]),
             p2=Point2d(cast_x=vec[1][0], cast_y=vec[1][1]),
         )
-        draw_vector(v, frame, Scalar[UInt8.dtype](255),w, w, h)
+        tessalator.draw_vector(v, Scalar[UInt8.dtype](255))
+    tessalator.commit()
 
     var image = Image(
         w=w, h=h, ch=1,
@@ -132,6 +119,35 @@ def test_draw_vector_imperfect_angles() raises:
         line_size=w
     )
     image_write(image, Path("test_data/test_renderer/test_draw_vector_imperfect_angles.png"))
+
+
+def test_draw_vector_basic() capturing raises:
+    var w = 100
+    var h = 100
+
+    var frame = alloc[Scalar[DType.uint8]](w * h * 1)
+    memset_zero(frame, w * h * 1)
+
+    var tessalator = Tessalator(frame, w, w, h)
+
+    var p2s = [
+        ((0.0, 0.0), (99.0, 9.0)),
+    ]
+    for vec in p2s:
+        var v = Vector2d(
+            p1=Point2d(cast_x=vec[0][0], cast_y=vec[0][1]),
+            p2=Point2d(cast_x=vec[1][0], cast_y=vec[1][1]),
+        )
+        tessalator.draw_vector(v, Scalar[UInt8.dtype](255))
+    tessalator.commit()
+
+    var image = Image(
+        w=w, h=h, ch=1,
+        ptr=frame, size=w * h * 1, 
+        color_space=ColorSpace.GREY_8, 
+        line_size=w
+    )
+    image_write(image, Path("test_data/test_renderer/test_draw_vector_basic.png"))
 
 
 
@@ -184,5 +200,6 @@ def test_draw_vector_imperfect_angles() raises:
 
 def main() raises:
     # TestSuite.discover_tests[__functions_in_module()]().run()
-    test_draw_vector_perfect_angles()
-    test_draw_vector_imperfect_angles()
+    print('test_draw_vector_basic', Float64(time_function[test_draw_vector_basic]()) / 1_000_000_000.0, "seconds")
+    print('test_draw_vector_perfect_angles', Float64(time_function[test_draw_vector_perfect_angles]()) / 1_000_000_000.0, "seconds")
+    print('test_draw_vector_imperfect_angles', Float64(time_function[test_draw_vector_imperfect_angles]()) / 1_000_000_000.0, "seconds")
