@@ -156,6 +156,11 @@ cmd = "./$(tools/mojo_build_ex.sh {{ file }})"
 args = ["file"]
 depends-on = [ { task = "build_debug", args = ["{{ file }}"] } ]
 
+[tasks.run]
+cmd = "./$(tools/mojo_build_ex.sh {{ file }})"
+args = ["file"]
+depends-on = [ { task = "build", args = ["{{ file }}"] } ]
+
 [tasks.test]
 args = ["file"]
 depends-on = [ 
