@@ -1,54 +1,60 @@
 from momanim.io_backends.image import Image
 from momanim.constants import ColorSpace
 from momanim.io_backends.mav.image_write import image_write
-# from momanim.mobject.polygram import Circle, Line
+from momanim.mobject.polygram import Circle
 # from momanim.mobject.bezier_curve import QuadBezierCurve, Point
 # from momanim.renderer.tessalation import tessellate_line, draw_triangle_strokes, draw_triangle_fill, Triangle
 # from momanim.typing import Vector3D
 from momanim.mobject.geometry import Point2d, Triangle2d, Trapezoid2d, Vector2d
-from momanim.renderer.tessalation import Tessalator
+from momanim.renderer.tessalation import Tessalator, decompose_curves_to_vectors
 from std.pathlib import Path
 from std.testing import TestSuite
-from momanim.utils.color import WHITE
+from momanim.utils.color import WHITE, RED
 from std.time import perf_counter_ns, time_function
 from std.memory import memset_zero
 
-# def test_tessalation() raises:
+def test_tessalation() raises:
 
-#     var w = 100
-#     var h = 100
+    var w = 100
+    var h = 100
 
-#     var frame = alloc[Scalar[DType.uint8]](w * h * 1)
-#     circle = Circle()
-#     circle.scale(15.0)
-#     circle.translate(SIMD[Float32.dtype, 4](50, 50, 0, 0))
+    var frame = alloc[Scalar[DType.uint8]](w * h * 1)
+    circle = Circle()
+    circle.scale(15.0)
+    circle.translate(SIMD[Float32.dtype, 4](50, 50, 0, 0))
 
-#     var original_circle = circle.copy()
-#     # # print("original_circle: ", original_circle.get_curves())
-#     var partial_circle = circle.pointwise_become_partial(original_circle, 0, 1)
+    var original_circle = circle.copy()
+    # # print("original_circle: ", original_circle.get_curves())
+    var partial_circle = circle.pointwise_become_partial(original_circle, 0, 1)
 
-#     ref curves = partial_circle.get_curves()
-#     # var line = Line()
-#     # line.scale(10.0)
-#     # line.translate(SIMD[Float32.dtype, 4](50, 50, 0, 0))
-#     # ref curves = line.get_curves()
-#     # print("curves: ", curves)
-#     # print("curves: ", len(curves))
+    ref curves = partial_circle.get_curves()
+    # var line = Line()
+    # line.scale(10.0)
+    # line.translate(SIMD[Float32.dtype, 4](50, 50, 0, 0))
+    # ref curves = line.get_curves()
+    # print("curves: ", curves)
+    # print("curves: ", len(curves))
 
-#     # TODO: Decide whether we want to pass a list of curves or just the object.
-#     var triangles = tessellate_line(curves, 0.0)
-#     # var points = tessellate_line(curves, 1)
-#     for triangle in triangles:
-#         draw_triangle_strokes(triangle, frame, w, 1)
-#         draw_triangle_fill(triangle, frame, w, 1)
+    # TODO: Decide whether we want to pass a list of curves or just the object.
+    var vectors = decompose_curves_to_vectors(curves, 0.0)
 
-#     var image = Image(
-#         w=w, h=h, ch=1,
-#         ptr=frame, size=w * h * 1, 
-#         color_space=ColorSpace.GREY_8, 
-#         line_size=w
-#     )
-#     image_write(image, Path("test_tessalation.png"))
+    var tessalator = Tessalator(frame, w, w, h)
+    for vector in vectors:
+        tessalator.draw_vector_scanline(vector)
+    tessalator.commit(UInt8(255))
+
+    # var points = tessellate_line(curves, 1)
+    # for triangle in triangles:
+    #     draw_triangle_strokes(triangle, frame, w, 1)
+    #     draw_triangle_fill(triangle, frame, w, 1)
+
+    var image = Image(
+        w=w, h=h, ch=1,
+        ptr=frame, size=w * h * 1, 
+        color_space=ColorSpace.GREY_8, 
+        line_size=w
+    )
+    image_write(image, Path("test_data/test_renderer/test_tessalation.png"))
 
 def test_draw_vector_perfect_angles() capturing raises:
     var w = 50
@@ -73,8 +79,8 @@ def test_draw_vector_perfect_angles() capturing raises:
             p1=Point2d(cast_x=vec[0][0], cast_y=vec[0][1]),
             p2=Point2d(cast_x=vec[1][0], cast_y=vec[1][1]),
         )
-        tessalator.draw_vector(v, Scalar[UInt8.dtype](255))
-    tessalator.commit()
+        tessalator.draw_vector_scanline(v)
+    tessalator.commit(UInt8(255))
 
     var image = Image(
         w=w, h=h, ch=1,
@@ -109,8 +115,8 @@ def test_draw_vector_imperfect_angles() capturing raises:
             p1=Point2d(cast_x=vec[0][0], cast_y=vec[0][1]),
             p2=Point2d(cast_x=vec[1][0], cast_y=vec[1][1]),
         )
-        tessalator.draw_vector(v, Scalar[UInt8.dtype](255))
-    tessalator.commit()
+        tessalator.draw_vector_scanline(v)
+    tessalator.commit(UInt8(255))
 
     var image = Image(
         w=w, h=h, ch=1,
@@ -138,8 +144,8 @@ def test_draw_vector_basic() capturing raises:
             p1=Point2d(cast_x=vec[0][0], cast_y=vec[0][1]),
             p2=Point2d(cast_x=vec[1][0], cast_y=vec[1][1]),
         )
-        tessalator.draw_vector(v, Scalar[UInt8.dtype](255))
-    tessalator.commit()
+        tessalator.draw_vector_scanline(v)
+    tessalator.commit(UInt8(255))
 
     var image = Image(
         w=w, h=h, ch=1,
@@ -149,6 +155,82 @@ def test_draw_vector_basic() capturing raises:
     )
     image_write(image, Path("test_data/test_renderer/test_draw_vector_basic.png"))
 
+
+
+def test_draw_vector_basic_color() capturing raises:
+    var w = 100
+    var h = 100
+    var ch = 4
+
+    var frame = alloc[Scalar[DType.uint8]](w * h * ch)
+    memset_zero(frame, w * h * ch)
+
+    var tessalator = Tessalator(frame, w, w, h)
+
+    var p2s = [
+        ((0.0, 0.0), (99.0, 9.0)),
+    ]
+    for vec in p2s:
+        var v = Vector2d(
+            p1=Point2d(cast_x=vec[0][0], cast_y=vec[0][1]),
+            p2=Point2d(cast_x=vec[1][0], cast_y=vec[1][1]),
+        )
+        tessalator.draw_vector_scanline(v)
+    tessalator.commit(RED)
+
+    var image = Image(
+        w=w, h=h, ch=ch,
+        ptr=frame, size=w * h * ch, 
+        color_space=ColorSpace.RGBA_32, 
+        line_size=w * ch
+    )
+    image_write(image, Path("test_data/test_renderer/test_draw_vector_basic_color.png"))
+
+
+def test_draw_vector_quarter_circle_segments() capturing raises:
+    var w = 100
+    var h = 100
+
+    var frame = alloc[Scalar[DType.uint8]](w * h * 1)
+    memset_zero(frame, w * h * 1)
+
+    var tessalator = Tessalator(frame, w, w, h)
+
+    # Draw the exact decomposed quarter-circle segments logged from
+    # `test_tessalation()` so vector rasterization can be checked independently
+    # from curve decomposition.
+    var p2s = [
+        ((35.0, 50.0), (35.0, 47.928932)),
+        ((35.0, 47.928932), (35.41973, 45.9559)),
+        ((35.41973, 45.9559), (36.17877, 44.161323)),
+        # ((36.17877, 44.161323), (36.937813, 42.36675)),
+        # ((36.937813, 42.36675), (38.036163, 40.750633)),
+        # ((38.036163, 40.750633), (39.3934, 39.3934)),
+        # ((39.3934, 39.3934), (40.750633, 38.036163)),
+        # ((40.750633, 38.036163), (42.36675, 36.937813)),
+        # ((42.36675, 36.937813), (44.161323, 36.17877)),
+        # ((44.161323, 36.17877), (45.9559, 35.41973)),
+        # ((45.9559, 35.41973), (47.928932, 35.0)),
+        # ((47.928932, 35.0), (50.0, 35.0)),
+    ]
+    for vec in p2s:
+        var v = Vector2d(
+            p1=Point2d(cast_x=vec[0][0], cast_y=vec[0][1]),
+            p2=Point2d(cast_x=vec[1][0], cast_y=vec[1][1]),
+        )
+        tessalator.draw_vector_scanline(v)
+    tessalator.commit(UInt8(255))
+
+    var image = Image(
+        w=w, h=h, ch=1,
+        ptr=frame, size=w * h * 1,
+        color_space=ColorSpace.GREY_8,
+        line_size=w
+    )
+    image_write(
+        image,
+        Path("test_data/test_renderer/test_draw_vector_quarter_circle_segments.png"),
+    )
 
 
 # def test_tessalation() raises:
@@ -200,6 +282,9 @@ def test_draw_vector_basic() capturing raises:
 
 def main() raises:
     # TestSuite.discover_tests[__functions_in_module()]().run()
-    print('test_draw_vector_basic', Float64(time_function[test_draw_vector_basic]()) / 1_000_000_000.0, "seconds")
-    print('test_draw_vector_perfect_angles', Float64(time_function[test_draw_vector_perfect_angles]()) / 1_000_000_000.0, "seconds")
-    print('test_draw_vector_imperfect_angles', Float64(time_function[test_draw_vector_imperfect_angles]()) / 1_000_000_000.0, "seconds")
+    # test_draw_vector_basic_color()
+    # test_tessalation()
+    test_draw_vector_quarter_circle_segments()
+    # print('test_draw_vector_basic', Float64(time_function[test_draw_vector_basic]()) / 1_000_000_000.0, "seconds")
+    # print('test_draw_vector_perfect_angles', Float64(time_function[test_draw_vector_perfect_angles]()) / 1_000_000_000.0, "seconds")
+    # print('test_draw_vector_imperfect_angles', Float64(time_function[test_draw_vector_imperfect_angles]()) / 1_000_000_000.0, "seconds")
