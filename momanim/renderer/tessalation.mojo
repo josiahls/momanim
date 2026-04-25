@@ -2,9 +2,54 @@ from momanim.mobject.geometry import Point2d, Triangle2d, Trapezoid2d, Vector2d
 from momanim.stdlib_extensions import Enumable
 from std.sys.intrinsics import size_of
 from std.math import floor, hypot, ceil, log2
-
+from momanim.mobject.bezier_curve import (
+    QuadBezierCurve,
+    decompose_bezier_curve,
+    Point,
+)
+from std.memory import memset_zero
 
 comptime ByteSize = 8
+
+
+def decompose_curves_to_vectors[
+    dtype: DType
+](
+    curves: List[QuadBezierCurve[dtype]], thickness: Float32, tolarence: Int = 1
+) raises -> List[Vector2d]:
+    """Draws a ribbon of `TriQuad`s along a line whose width is `thickness`."""
+    comptime assert dtype.is_floating_point()
+    var vectors = List[Vector2d]()
+    var prev_point: Optional[Point[Float64.dtype]] = None
+    # var point: Point[Float64.dtype]
+    var points = List[Point[Float64.dtype]]()
+
+    for curve in curves:
+        decompose_bezier_curve(points, curve)
+
+    for point in points:
+        # TODO: Do we need to do and prev_point[] != point?
+        # print("point: ", point)
+        if prev_point:
+            if round(prev_point[].coords[0]) == round(
+                point.coords[0]
+            ) and round(prev_point[].coords[1]) == round(point.coords[1]):
+                # print("Skipping duplicate point: ", point.coords)
+                continue
+            vectors.append(
+                Vector2d(
+                    Point2d(
+                        x=Float32(prev_point[].coords[0]),
+                        y=Float32(prev_point[].coords[1]),
+                    ),
+                    Point2d(
+                        x=Float32(point.coords[0]), y=Float32(point.coords[1])
+                    ),
+                )
+            )
+        prev_point = point.copy()
+
+    return vectors^
 
 
 struct LineType(Enumable):
@@ -88,6 +133,15 @@ struct CartessianVector2d(Copyable, Writable):
         self.p2.swap_axis()
 
 
+struct Span2d(Copyable, Writable):
+    var p0: Point2d
+    var p1: Point2d
+
+    def __init__(out self, v: Vector2d):
+        self.p0 = v.p1.copy()
+        self.p1 = v.p2.copy()
+
+
 struct Tessalator:
     var image_ptr: UnsafePointer[UInt8, MutExternalOrigin]
     var mask: UnsafePointer[UInt8, MutExternalOrigin]
@@ -123,6 +177,7 @@ struct Tessalator:
         self.w = w
         self.h = h
         self.mask = alloc[UInt8](self.linesize * h)
+        memset_zero(self.mask, self.linesize * h)
 
         self.hypot = ceil(hypot(Float32(w), Float32(h)))
         # log2(hypot) = how many bytes are needed to represent the length?
@@ -138,21 +193,64 @@ struct Tessalator:
     def draw_intensity(mut self, x: Int, y: Int, intensity: UInt8):
         self.mask.store(val=intensity, offset=Int(round(y * self.linesize + x)))
 
-    def commit(mut self):
+    def commit[width: Int](mut self, color: SIMD[UInt8.dtype, width]):
+        comptime assert width == 1 or width == 4
         for y in range(self.h):
             for x in range(self.linesize):
+                var mask_offset = y * self.linesize + x
+                var offset = y * self.linesize * width + x * width
+                var c_b_f_b = self.image_ptr.load[width](offset=offset)
+                var f_a = self.mask.load(offset=mask_offset)
+                # TODO: Need to handle Porder-Duff operations generally.
+                # This for now is: A over B Porter Duff op hardcoded.
+                var alpha: UInt8
+                comptime if width == 1:
+                    alpha = c_b_f_b[0]
+                else:
+                    alpha = c_b_f_b[3]
+                # TODO: So ugly. Also wondering can we use the rshifting to maintain
+                # the int representation? Casting to float can't be good here.
+
+                # TODO: Also can't we premultiply earlier? Cant we use SIMD operations
+                # to do this quickly?
+                var alpha_a_float: Float32 = Float32(f_a) / 255.0
+                var alpha_b_float: Float32 = Float32(alpha) / 255.0
+
+                # TODO: This can be done earlier
+                var pre_multiplied_a = (
+                    SIMD[Float32.dtype, width](color) * alpha_a_float
+                )
+                var pre_multiplied_b = (
+                    SIMD[Float32.dtype, width](c_b_f_b) * alpha_b_float
+                )
+
+                var dest_color = pre_multiplied_a + pre_multiplied_b * (
+                    1 - alpha_a_float
+                )
+
                 self.image_ptr.store(
-                    val=self.mask.load(offset=y * self.linesize + x),
-                    offset=y * self.linesize + x,
+                    val=SIMD[UInt8.dtype, width](dest_color), offset=offset
                 )
 
     def draw_point[
         color_width: Int
     ](mut self, p: Point2d, color: SIMD[UInt8.dtype, color_width]):
         # TODO: Debating where we should check dimensions.
-        self.mask.store(
-            val=color, offset=Int(round(p.y * Float32(self.linesize) + p.x))
-        )
+        # TODO: We need to add blend methods. For now, I think it should be
+        # max alpha.
+        var offset = Int(round(p.y)) * self.linesize + Int(round(p.x))
+
+        # var dest = color.cast[Float32.dtype]() + self.mask.load(offset).cast[Float32.dtype]() * (1 - color.cast[Float32.dtype]() / 255.0)
+        # self.mask.store(val=dest.cast[UInt8.dtype](), offset=offset)
+        if color > self.mask.load(offset):
+            self.mask.store(val=color, offset=offset)
+
+    def draw_vector_scanline(
+        mut self,
+        v: Vector2d,
+        line_type: LineType = LineType.ANTI_ALIASED,
+    ):
+        var span = Span2d(v)
 
     def draw_vector[
         color_width: Int
@@ -181,19 +279,30 @@ struct Tessalator:
         comptime assert T.is_integral()
         comptime assert T.is_unsigned()
         comptime UIntT = Scalar[T]
+        print("v: ", v)
+
         var cartessian_v = CartessianVector2d(v)
 
         var mag = cartessian_v.magnitude()
+        # If y > x
         if abs(mag.dep) > abs(mag.indep):
             cartessian_v.swap_axis()
             mag.swap_axis()
 
         var k: Float32 = abs(mag.dep / mag.indep)
 
-        var direct_inc = Float32(-1.0 if mag.indep < 0 else 1.0)
+        var indep_inc = Float32(-1.0 if mag.indep < 0 else 1.0)
         var depend_inc = Float32(-1.0 if mag.dep < 0 else 1.0)
-        assert k <= 1, "k must be less than or equal to 1 got: {}".format(k)
-        assert k >= 0, "k must be greater than or equal to 0 got: {}".format(k)
+        assert (
+            k <= 1
+        ), "k must be less than or equal to 1 got: {} for vector: {}".format(
+            k, v
+        )
+        assert (
+            k >= 0
+        ), "k must be greater than or equal to 0 got: {} for vector: {}".format(
+            k, v
+        )
 
         var D: UIntT = 0
         var new_D: UIntT
@@ -207,21 +316,31 @@ struct Tessalator:
             m: Int
         ](color: SIMD[UInt8.dtype, 1], coverage: UInt8) -> SIMD[UInt8.dtype, 1]:
             """Scales a grayscale color by an 8-bit coverage."""
+            # TODO: tbh I'm not a fan of this. Also the >> m I think is wrong,
+            # only scaling up to 247 instead of 255.
             var scaled = (SIMD[T, 1](color) * SIMD[T, 1](coverage)) >> m
             return SIMD[UInt8.dtype, 1](scaled)
 
-        self.draw_point[1](cartessian_v.p1.to_point2d(), 255)
-        self.draw_point[1](cartessian_v.p2.to_point2d(), 255)
+        var coverage: UInt8 = UInt8(
+            d >> UIntT(self.gray_scale_precision - self.gray_scales)
+        )  # Same as floor(D / 2^{n - m})
+
+        self.draw_point[1](
+            cartessian_v.p1.to_point2d(),
+            _scale_coverage[self.gray_scales](255, coverage),
+        )
+        var end_endpoint = cartessian_v.p2.to_point2d().copy()
+
         while (
             cartessian_v.p1.indep
-            <= cartessian_v.p2.indep if direct_inc
+            <= cartessian_v.p2.indep if indep_inc
             > 0 else cartessian_v.p1.indep
             >= cartessian_v.p2.indep
         ):
-            cartessian_v.p1.indep += direct_inc
-            cartessian_v.p2.indep -= direct_inc
+            cartessian_v.p1.indep += indep_inc
+            cartessian_v.p2.indep -= indep_inc
 
-            if k != 1:
+            if k != 1 and d != 0:
                 new_D = D + d
                 inc_depend_axis = new_D < D
                 D = new_D
@@ -229,7 +348,7 @@ struct Tessalator:
                 cartessian_v.p1.dep += depend_inc
                 cartessian_v.p2.dep -= depend_inc
 
-            if k == 1:
+            if k == 1 or k == 0:
                 self.draw_point(
                     cartessian_v.p1.to_point2d(), SIMD[UInt8.dtype, 1](255)
                 )
@@ -238,7 +357,7 @@ struct Tessalator:
                 )
                 continue
 
-            var coverage: UInt8 = UInt8(
+            coverage: UInt8 = UInt8(
                 D >> UIntT(self.gray_scale_precision - self.gray_scales)
             )  # Same as floor(D / 2^{n - m})
             var inverse_coverage: UInt8 = (
@@ -249,6 +368,8 @@ struct Tessalator:
             p1_offset.dep += depend_inc
             var p2_offset = CartessianPoint2d(cartessian_v.p2)
             p2_offset.dep -= depend_inc
+
+            # print("drawing: cartessian_v.p1: ", cartessian_v.p1.to_point2d(), "cartessian_v.p2: ", cartessian_v.p2.to_point2d())
 
             self.draw_point(
                 cartessian_v.p1.to_point2d(),
@@ -266,3 +387,6 @@ struct Tessalator:
                 p2_offset.to_point2d(),
                 _scale_coverage[self.gray_scales](255, coverage),
             )
+        self.draw_point[1](
+            end_endpoint, _scale_coverage[self.gray_scales](255, coverage)
+        )
