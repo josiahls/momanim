@@ -1,11 +1,9 @@
-from numojo.core import DataContainer
 from std.ffi import c_uchar
 from momanim.constants import ColorSpace
-import numojo as nm
 
 
 struct Image[dtype: DType = DType.uint8](Movable, Writable):
-    var _data: DataContainer[Self.dtype]
+    var _data: UnsafePointer[Scalar[Self.dtype], MutExternalOrigin]
     var w: UInt
     var h: UInt
     var ch: UInt
@@ -28,11 +26,7 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
         self.h = 1
         self.ch = 1
         self.line_size = self.w
-        self._data = DataContainer(
-            ptr=elems.unsafe_ptr().unsafe_origin_cast[MutExternalOrigin](),
-            size=len(elems),
-            copy=False,
-        )
+        self._data = elems.unsafe_ptr().unsafe_origin_cast[MutExternalOrigin]()
         self.color_space = ColorSpace.RGB_24
         self.io_backend_opaque_params = {}
 
@@ -43,7 +37,7 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
         ch: UInt,
         line_size: UInt,
         color_space: ColorSpace,
-        container: DataContainer[Self.dtype],
+        ptr: UnsafePointer[Scalar[Self.dtype], MutExternalOrigin],
     ) raises:
         self.w = w
         self.h = h
@@ -51,7 +45,7 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
         self.line_size = line_size
         self.color_space = color_space
         self.io_backend_opaque_params = {}
-        self._data = container.copy()
+        self._data = ptr.unsafe_origin_cast[MutExternalOrigin]()
 
     def __init__(
         out self,
@@ -69,11 +63,7 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
         self.h = 1
         self.ch = 1
         self.line_size = line_size
-        self._data = DataContainer(
-            ptr=ptr.unsafe_origin_cast[MutExternalOrigin](),
-            size=size,
-            copy=False,
-        )
+        self._data = ptr.unsafe_origin_cast[MutExternalOrigin]()
         self.color_space = ColorSpace.RGB_24
         self.io_backend_opaque_params = {}
 
@@ -91,21 +81,6 @@ struct Image[dtype: DType = DType.uint8](Movable, Writable):
         self.h = h
         self.ch = ch
         self.line_size = line_size
-        self._data = DataContainer(
-            ptr=ptr.unsafe_origin_cast[MutExternalOrigin](),
-            size=size,
-            copy=False,
-        )
+        self._data = ptr.unsafe_origin_cast[MutExternalOrigin]()
         self.color_space = color_space
         self.io_backend_opaque_params = {}
-
-    def numojo(mut self) raises -> nm.NDArray[Self.dtype]:
-        var array = nm.NDArray[Self.dtype](
-            shape=nm.NDArrayShape(Int(self.h), Int(self.w), Int(self.ch)),
-            is_view=True,
-            data=self._data.copy(),
-            # TODO: I think we need to factor in the linesize somehow.
-            strides=nm.NDArrayStrides(Int(self.line_size), Int(self.ch), 1),
-            offset=0,
-        )
-        return array^

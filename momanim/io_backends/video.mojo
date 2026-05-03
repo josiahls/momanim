@@ -1,11 +1,9 @@
-from numojo.core import DataContainer
 from std.ffi import c_uchar
 from momanim.constants import ColorSpace
-import numojo as nm
 
 
 struct VideoFrame[dtype: DType = DType.uint8](Copyable, Movable, Writable):
-    var _data: DataContainer[Self.dtype]
+    var _data: UnsafePointer[Scalar[Self.dtype], MutExternalOrigin]
 
     def __init__(
         out self,
@@ -13,11 +11,7 @@ struct VideoFrame[dtype: DType = DType.uint8](Copyable, Movable, Writable):
         size: Int,
         copy: Bool = False,
     ) raises:
-        self._data = DataContainer(
-            ptr=ptr.unsafe_origin_cast[MutExternalOrigin](),
-            size=size,
-            copy=copy,
-        )
+        self._data = ptr.unsafe_origin_cast[MutExternalOrigin]()
 
 
 # TODO: Video should default to RGBA_32.

@@ -162,7 +162,7 @@ def image_write(image: Image[c_uchar.dtype], path: Path) raises:
     src_frame[].height = c_int(image.h)
     src_frame[].colorspace = AVColorSpace.AVCOL_SPC_RGB._value
     src_frame[].color_range = AVColorRange.AVCOL_RANGE_JPEG._value
-    src_frame[].data[0] = image._data.ptr
+    src_frame[].data[0] = image._data.unsafe_origin_cast[MutExternalOrigin]()
     src_frame[].linesize[0] = c_int(image.line_size)
     src_frame[].pts = 0
 
