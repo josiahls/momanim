@@ -188,8 +188,9 @@ struct HalfPlane2d(Copyable, Writable):
         if self.ij.x == 0:  # I think this is dx == 0, so vertical.
             return self.c  # right? Do we need to involve self.c?
         else:
-            b_div_a = self.ij.y / self.ij.x
-            return b_div_a * y * -1 - self.c
+            b_div_a = -self.c - self.ij.y * y
+            b_div_a /= self.ij.x
+            return b_div_a
 
 
 @fieldwise_init

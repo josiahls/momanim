@@ -1,6 +1,7 @@
 from std.testing import TestSuite, assert_equal, assert_true
 
 from momanim.rasterization.typing import *
+from momanim.mobject.geometry import Vector2d, Point2d
 
 
 
@@ -44,8 +45,27 @@ def test_FixedPoint16() raises:
     assert_equal(d.to_real_float(), 0.75)
 
 
+def test_FixedPointTrapezoid2d() raises:
+    # Test vector2d + thickness
+    var v = Vector2d(
+        p1=Point2d(0.0, 0.0),
+        p2=Point2d(1.0, 1.0),
+    )
+    var trapezoids = FixedPointTrapezoid2d.traps_from_edge(v, 0.5)
+    for trapezoid in trapezoids:
+        assert_equal(trapezoid.r.p0.x.to_real_float(), -0.17677307)
+        assert_equal(trapezoid.r.p0.y.to_real_float(), 0.17677307)
+        assert_equal(trapezoid.r.p1.x.to_real_float(), 0.82321167)
+        assert_equal(trapezoid.r.p1.y.to_real_float(), 1.1767731)
+
+        assert_equal(trapezoid.l.p0.x.to_real_float(), 0.17677307)
+        assert_equal(trapezoid.l.p0.y.to_real_float(), -0.17677307)
+        assert_equal(trapezoid.l.p1.x.to_real_float(), 1.1767731)
+        assert_equal(trapezoid.l.p1.y.to_real_float(), 0.82321167)
+
 
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    # TestSuite.discover_tests[__functions_in_module()]().run()
     # test_FixedPoint16()
     # test_XPixelSampling()
+    test_FixedPointTrapezoid2d()
