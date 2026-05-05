@@ -31,7 +31,15 @@ struct FixedDType[
     dtype: DType,
     int_bytes: Int = size_of[dtype]() / 2,
     frac_bytes: Int = size_of[dtype]() - int_bytes,
-]:  # , Floorable, ImplicitlyCopyable, Intable, Floatable, Writable):
+](
+    Comparable,
+    Floatable,
+    Floorable,
+    ImplicitlyCopyable,
+    Intable,
+    Writable,
+    Writable,
+):
     """Represents FixedPoint scalars and enables fixed point arithmetic.
 
     Parameters:
@@ -71,6 +79,9 @@ struct FixedDType[
 
     comptime max_value = Self(raw_value=_maximum_repr_value[Self.dtype]())
     comptime min_value = Self(raw_value=_minimum_repr_value[Self.dtype]())
+    comptime max_frac_value = Self(
+        raw_value=Self.one.value - Self.epsilon.value
+    )
 
     # TODO: Maybe support varying width?
     var value: Scalar[Self.dtype]
@@ -96,7 +107,10 @@ struct FixedDType[
 
         The value is shifted left by `self.frac_bits`.
         """
-        self.value = Scalar[Self.dtype](value << self.frac_bits)
+        if value == 0:
+            self = Self(raw_value=value)
+        else:
+            self = Self(raw_value=value << self.frac_bits)
 
     def __init__(out self, value: Float32):
         """Creates `Self` from `value` where `value` is a Float.
@@ -105,110 +119,97 @@ struct FixedDType[
 
         Note this can truncate floating point values.
         """
-        # TODO: Do we want to require no truncation by checking the float value
-        # size and then provide a API call for unsafe truncating?
-        self.value = Scalar[Self.dtype](Float64(value) * Self.frac_scale)
+        if value == 0.0:
+            self = Self(raw_value=0)
+        else:
+            # TODO: Do we want to require no truncation by checking the float value
+            # size and then provide a API call for unsafe truncating?
+            self = Self(raw_value=Int(Float64(value) * Self.frac_scale))
 
+    def __eq__(self, other: Self) -> Bool:
+        return self.value == other.value
 
-#     def __init__(out self, value: Scalar[Self.dtype]):
-#         self.value = value
+    def __lt__(self, other: Self) -> Bool:
+        return self.value < other.value
 
-#     def __init__(out self, value: FixedPoint[_, _]):
-#         self.value = Scalar[Self.dtype](value.value)
+    def __sub__(self, other: Self) -> Self:
+        return {raw_value = self.value - other.value}
 
-#     def __init__(out self, value: Int):
-#         if value > 0:
-#             self.value = Scalar[Self.dtype](value) << Self.scale_int_value
-#         else:
-#             self.value = Scalar[Self.dtype](value)
+    def __add__(self, other: Self) -> Self:
+        return {raw_value = self.value + other.value}
 
-#     def __init__(out self, value: Float32):
-#         self.value = Scalar[Self.dtype](value * Self.scale_float_value)
+    def wide_mul[other_dtype: DType](self, other: Self) -> Self:
+        comptime assert (
+            other_dtype.is_integral()
+        ), "Cannot widen multiply since `other_dtype` is not an integral type."
+        comptime assert size_of[Self.dtype]() <= size_of[other_dtype](), (
+            "Cannot widen multiply since `other_dtype` is equal or smaller "
+            "than `Self.dtype`."
+        )
+        comptime IntBigger = Scalar[other_dtype]
+        var result = IntBigger(self.value) * IntBigger(other.value)
+        return {
+            raw_value = Scalar[Self.dtype](result >> IntBigger(Self.frac_bits))
+        }
 
-#     def __init__(out self, value: Float64):
-#         self.value = Scalar[Self.dtype](value * Float64(Self.scale_float_value))
+    # def __mul__(self, other: Self) -> Self:
+    #     return {raw_value=self.value * other.value}
 
-#     @staticmethod
-#     def cast(value: Int) -> Self:
-#         return Self(Scalar[Self.dtype](value))
+    # def __mul__(self, other: Int) -> Self:
+    #     return {raw_value=self.value * Scalar[Self.dtype](other)}
 
-# def __eq__(self, other: Self) -> Bool:
-#     return self.value == other.value
+    def __mod__(self, other: Self) -> Self:
+        return {raw_value = self.value % other.value}
 
-# def __eq__(self, other: Int) -> Bool:
-#     return self.value == Scalar[Self.dtype](other)
+    #     def slow_div(self, other: Self) -> Self:
+    #         """Floating point division of FixedPoint values.
 
-# def __lt__(self, other: Self) -> Bool:
-#     return self.value < other.value
+    #         This is explicit instead of `__div__` since the purpose of FixedPoint
+    #         values is fast integer arithmetic operations.
+    #         """
+    #         return Self(Float64(self.value) / Float64(other.value))
 
-# def __lt__(self, other: Int) -> Bool:
-#     return self.value < Scalar[Self.dtype](other)
+    #     def __truediv__(self, other: Self) -> Self:
+    #         return {self.value / other.value}
 
-#     def __sub__(self, other: Self) -> Self:
-#         return Self(self.value - other.value)
+    #     def __truediv__(self, other: Int) -> Self:
+    #         # TODO: There has to be a nicer way to handle this.
+    #         return {self.value / Scalar[Self.dtype](other)}
 
-#     def __add__(self, other: Self) -> Self:
-#         return Self(self.value + other.value)
+    def __and__(self, other: Self) -> Self:
+        return {raw_value = self.value & other.value}
 
-#     def __mul__(self, other: Self) -> Self:
-#         return Self(self.value * other.value)
+    #     def __rshift__(self, pow_of_2: Int) -> Self:
+    #         return {self.value >> Scalar[Self.dtype](pow_of_2)}
 
-#     def __mul__(self, other: Int) -> Self:
-#         return Self(self.value * Scalar[Self.dtype](other))
+    def __int__(self) -> Int:
+        return Int(self.value >> Scalar[Self.dtype](Self.frac_bits))
 
-#     def __mod__(self, other: Self) -> Self:
-#         return Self(self.value % other.value)
+    def __float__(self) -> Float64:
+        return Float64(self.value) / Self.frac_scale
 
-#     def slow_div(self, other: Self) -> Self:
-#         """Floating point division of FixedPoint values.
+    def frac(self) -> Self:
+        """Returns only the fractional part of the value."""
+        return self & (Self.one - Self.epsilon)
 
-#         This is explicit instead of `__div__` since the purpose of FixedPoint
-#         values is fast integer arithmetic operations.
-#         """
-#         return Self(Float64(self.value) / Float64(other.value))
+    #     def write_to(self, mut writer: Some[Writer]):
+    #         writer.write("(", self.value, ", real:", self.to_real_float(), ")")
 
-#     def __truediv__(self, other: Self) -> Self:
-#         return {self.value / other.value}
+    #     def write_real_to(self, mut writer: Some[Writer]):
+    #         writer.write("(", self.to_real_float(), ")")
 
-#     def __truediv__(self, other: Int) -> Self:
-#         # TODO: There has to be a nicer way to handle this.
-#         return {self.value / Scalar[Self.dtype](other)}
+    def __neg__(self) -> Self:
+        return {raw_value = -self.value}
 
-#     def __and__(self, other: Self) -> Self:
-#         return Self(self.value & other.value)
+    def __iadd__(mut self, other: Self):
+        self.value += other.value
 
-#     def __rshift__(self, pow_of_2: Int) -> Self:
-#         return {self.value >> Scalar[Self.dtype](pow_of_2)}
+    def __isub__(mut self, other: Self):
+        self.value -= other.value
 
-#     def __int__(self) -> Int:
-#         return Int(self.value)
+    def __floor__(self) -> Self:
+        return {raw_value = self.value & ~(Self.max_frac_value.value)}
 
-#     def to_real_int(self) -> Int:
-#         return Int(self.value >> Self.scale_int_value)
-
-#     def to_real_float(self) -> Float32:
-#         return Float32(self.value) / Self.scale_float_value
-
-#     def get_fractional_part(self) -> Self:
-#         return self & (Self.one - Self.e)
-
-#     def write_to(self, mut writer: Some[Writer]):
-#         writer.write("(", self.value, ", real:", self.to_real_float(), ")")
-
-#     def write_real_to(self, mut writer: Some[Writer]):
-#         writer.write("(", self.to_real_float(), ")")
-
-#     def __neg__(self) -> Self:
-#         return Self(self.value * -1)
-
-#     def __iadd__(mut self, other: Self):
-#         self.value += other.value
-
-#     def __isub__(mut self, other: Self):
-#         self.value -= other.value
-
-#     def __floor__(self) -> Self:
-#         return Self(self.value & ~(Self.one.value - Self.e.value))
 
 #     def __or__(self, other: Self) -> Self:
 #         return Self(self.value | other.value)

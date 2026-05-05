@@ -1,4 +1,10 @@
-from std.testing import TestSuite, assert_equal, assert_not_equal, assert_true
+from std.testing import (
+    TestSuite, 
+    assert_equal, 
+    assert_not_equal, 
+    assert_true, 
+    assert_false
+)
 
 # from momanim.rasterization.fixed_dtype  import (
 #     FixedInt,
@@ -11,7 +17,7 @@ from momanim.rasterization.fixed_dtype import (
 )
 
 
-def test_FixedDType_unsigned() raises:
+def test_FixedDType_uint32_unsigned() raises:
     """Test unsigned.
     
     Note, we don't have an actual unsigned
@@ -24,8 +30,6 @@ def test_FixedDType_unsigned() raises:
     assert_equal(UInt32(4294967296), 4294967296)
     # Important: int32 converts 4294967296 to 0.
     assert_not_equal(Int64(4294967296), Int64(Int32(4294967296)))
-
-
 
 
 def test_FixedPoint16x16() raises:
@@ -74,7 +78,66 @@ def test_FixedPoint16x16__init__Float32() raises:
     assert_equal(FixedPoint16x16(-0.99999).value, -65535)
 
 
+def test_FixedPoint16x16__eq__() raises:
+    assert_true(FixedPoint16x16(1) == FixedPoint16x16(1))
+    assert_false(FixedPoint16x16(1) == FixedPoint16x16(2))
 
+def test_FixedPoint16x16__lt__() raises:
+    assert_true(FixedPoint16x16(1) < FixedPoint16x16(2))
+    assert_false(FixedPoint16x16(2) < FixedPoint16x16(1))
+
+
+def test_FixedPoint16x16__sub__() raises:
+    assert_equal(FixedPoint16x16(1) - FixedPoint16x16(2), FixedPoint16x16(-1))
+    assert_equal(FixedPoint16x16(2) - FixedPoint16x16(1), FixedPoint16x16(1))
+
+def test_FixedPoint16x16__add__() raises:
+    assert_equal(FixedPoint16x16(1) + FixedPoint16x16(2), FixedPoint16x16(3))
+    assert_equal(FixedPoint16x16(2) + FixedPoint16x16(1), FixedPoint16x16(3))
+
+def test_FixedPoint16x16_wide_mul() raises:
+    assert_equal(FixedPoint16x16(1).wide_mul[DType.int64](FixedPoint16x16(2)), FixedPoint16x16(2))
+    assert_equal(FixedPoint16x16(2).wide_mul[DType.int64](FixedPoint16x16(1)), FixedPoint16x16(2))
+
+def test_FixedPoint16x16__mod__() raises:
+    assert_equal(FixedPoint16x16(1) % FixedPoint16x16(2), FixedPoint16x16(1))
+    assert_equal(FixedPoint16x16(2) % FixedPoint16x16(1), FixedPoint16x16(0))
+
+def test_FixedPoint16x16__and__() raises:
+    assert_equal(FixedPoint16x16(1) & FixedPoint16x16(2), FixedPoint16x16(0))
+    assert_equal(FixedPoint16x16(2) & FixedPoint16x16(1), FixedPoint16x16(0))
+
+def test_FixedPoint16x16__int__() raises:
+    assert_equal(Int(FixedPoint16x16(1)), 1)
+    assert_equal(Int(FixedPoint16x16(2)), 2)
+
+def test_FixedPoint16x16__float__() raises:
+    assert_equal(Float64(FixedPoint16x16(1)), 1.0)
+    assert_equal(Float64(FixedPoint16x16(2)), 2.0)
+
+def test_FixedPoint16x16__frac__() raises:
+    assert_equal(FixedPoint16x16(1).frac(), FixedPoint16x16(0))
+    assert_equal(FixedPoint16x16(2).frac(), FixedPoint16x16(0))
+
+def test_FixedPoint16x16__neg__() raises:
+    assert_equal(-FixedPoint16x16(1), FixedPoint16x16(-1))
+    assert_equal(-FixedPoint16x16(2), FixedPoint16x16(-2))
+
+def test_FixedPoint16x16__iadd__() raises:
+    var a = FixedPoint16x16(1)
+    a += FixedPoint16x16(2)
+    assert_equal(a, FixedPoint16x16(3))
+    var b = FixedPoint16x16(2)
+    b += FixedPoint16x16(1)
+    assert_equal(b, FixedPoint16x16(3))
+
+def test_FixedPoint16x16__isub__() raises:
+    var a = FixedPoint16x16(1)
+    a -= FixedPoint16x16(2)
+    assert_equal(a, FixedPoint16x16(-1))
+    var b = FixedPoint16x16(2)
+    b -= FixedPoint16x16(1)
+    assert_equal(b, FixedPoint16x16(1))
 # def test_XPixelSampling() raises:
 #     # Assuming we have an image that is 10 pixels wide.
 #     # - Use FixedInt which is 16x16 using a uint32 container
