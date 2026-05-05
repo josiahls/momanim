@@ -9,8 +9,7 @@
 *.mojopkg
 
 # Submodules
-third_party/modular
-third_party/modular/bazel-modular
+third_party/
 
 # Stdlib build artifacts
 kgen.trace*
