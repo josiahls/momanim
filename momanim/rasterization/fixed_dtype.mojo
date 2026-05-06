@@ -139,10 +139,15 @@ struct FixedDType[
         return {raw_value = self.value + other.value}
 
     def wide_mul[other_dtype: DType](self, other: Self) -> Self:
+        """Performs fixed point multiplication.
+
+        Multiplication is done via widing dtype, multiplying, and then shifting
+        back to the original dtype.
+        """
         comptime assert (
             other_dtype.is_integral()
         ), "Cannot widen multiply since `other_dtype` is not an integral type."
-        comptime assert size_of[Self.dtype]() <= size_of[other_dtype](), (
+        comptime assert size_of[Self.dtype]() < size_of[other_dtype](), (
             "Cannot widen multiply since `other_dtype` is equal or smaller "
             "than `Self.dtype`."
         )
@@ -151,12 +156,6 @@ struct FixedDType[
         return {
             raw_value = Scalar[Self.dtype](result >> IntBigger(Self.frac_bits))
         }
-
-    # def __mul__(self, other: Self) -> Self:
-    #     return {raw_value=self.value * other.value}
-
-    # def __mul__(self, other: Int) -> Self:
-    #     return {raw_value=self.value * Scalar[Self.dtype](other)}
 
     def __mod__(self, other: Self) -> Self:
         return {raw_value = self.value % other.value}
@@ -179,24 +178,20 @@ struct FixedDType[
     def __and__(self, other: Self) -> Self:
         return {raw_value = self.value & other.value}
 
-    #     def __rshift__(self, pow_of_2: Int) -> Self:
-    #         return {self.value >> Scalar[Self.dtype](pow_of_2)}
+    def __rshift__(self, rhs: Int) -> Self:
+        return {raw_value = self.value >> Scalar[Self.dtype](rhs)}
 
     def __int__(self) -> Int:
+        "Returns the non-fixed point integral value of the fixed point value."
         return Int(self.value >> Scalar[Self.dtype](Self.frac_bits))
 
     def __float__(self) -> Float64:
+        "Returns the non-fixed point floating point value of the fixed point value."
         return Float64(self.value) / Self.frac_scale
 
     def frac(self) -> Self:
         """Returns only the fractional part of the value."""
         return self & (Self.one - Self.epsilon)
-
-    #     def write_to(self, mut writer: Some[Writer]):
-    #         writer.write("(", self.value, ", real:", self.to_real_float(), ")")
-
-    #     def write_real_to(self, mut writer: Some[Writer]):
-    #         writer.write("(", self.to_real_float(), ")")
 
     def __neg__(self) -> Self:
         return {raw_value = -self.value}
@@ -210,14 +205,13 @@ struct FixedDType[
     def __floor__(self) -> Self:
         return {raw_value = self.value & ~(Self.max_frac_value.value)}
 
-
-#     def __or__(self, other: Self) -> Self:
-#         return Self(self.value | other.value)
+    def __or__(self, other: Self) -> Self:
+        return {raw_value = self.value | other.value}
 
 
 # int64 backing for intermediates (see Pixman `pixman_fixed_48_16_t`), same **16 fractional
 # bits** as `FixedInt`: second param is **bytes** of fractional part → 2 * 8 = 16 bits.
-comptime FixedPoint48x16 = FixedDType[DType.int64, 2]
+comptime FixedPoint48x16 = FixedDType[DType.int64, 6]
 comptime FixedPoint16x16 = FixedDType[DType.int32]
 """A 16x16 FixedPoint integer.
 
