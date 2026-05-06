@@ -157,6 +157,61 @@ struct FixedDType[
             raw_value = Scalar[Self.dtype](result >> IntBigger(Self.frac_bits))
         }
 
+    def floor_div(self, other: Self) -> Self:
+        """Integer division that rounds fractional portion towards zero."""
+        var result = self.floor_div_raw(other)
+        return {raw_value = result << Scalar[Self.dtype](Self.frac_bits)}
+
+    def floor_div_raw(self, other: Self) -> Scalar[Self.dtype]:
+        """Integer division that rounds fractional portion towards zero.
+
+        Returns the raw value instead of fixed point equivolent.
+        """
+        return self.value / other.value
+
+    def negative_floor_div(self, other: Self) -> Self:
+        """Integer division that rounds fractional portion towards -infinity."""
+        if (self.value < 0) == (other.value < 0):
+            return self.floor_div(other)
+
+        var result = self.negative_floor_div_raw[check=False](other)
+        return {raw_value = result << Scalar[Self.dtype](Self.frac_bits)}
+
+    def negative_floor_div_raw[
+        check: Bool = True
+    ](self, other: Self) -> Scalar[Self.dtype]:
+        """Integer division that rounds fractional portion towards -infinity.
+
+        Returns the raw value instead of fixed point equivolent.
+        """
+        # NOTE: Avoid checking twice (ref negative_floor_div)
+        comptime if check:
+            if (self.value < 0) == (other.value < 0):
+                return self.floor_div_raw(other)
+
+        # +1 or -1 depending on the sign of b.
+        var sign = 1 - Scalar[Self.dtype](other.value < 0) * 2
+        return (self.value - other.value + sign) / other.value
+
+    def wide_div[other_dtype: DType](self, other: Self) -> Self:
+        """Performs fixed point division by widening to avoid truncation.
+
+        Multiplication is done via widing dtype, multiplying, and then shifting
+        back to the original dtype.
+        """
+        comptime assert (
+            other_dtype.is_integral()
+        ), "Cannot widen multiply since `other_dtype` is not an integral type."
+        comptime assert size_of[Self.dtype]() < size_of[other_dtype](), (
+            "Cannot widen multiply since `other_dtype` is equal or smaller "
+            "than `Self.dtype`."
+        )
+        comptime IntBigger = Scalar[other_dtype]
+        var result = (
+            IntBigger(self.value) << IntBigger(Self.frac_bits)
+        ) / IntBigger(other.value)
+        return {raw_value = Scalar[Self.dtype](result)}
+
     def __mod__(self, other: Self) -> Self:
         return {raw_value = self.value % other.value}
 
@@ -223,148 +278,3 @@ Where:
 comptime FixedInt = FixedPoint16x16
 """The default fixed int representation.
 """
-
-
-# @fieldwise_init
-# struct PixelSampling[offset: Int, n: Int = 8](Writable):
-#     comptime samples_per_pixel: Int = (1 << Self.n / 2) + Self.offset
-#     """The number of rows and columns in a subpixel area.
-
-#     Default usage:
-#     - X direction: 17 columns
-#     - Y direction: 15 columns
-#     """
-#     comptime step_size: FixedInt = FixedInt.one / Self.samples_per_pixel
-#     "A single unit step repsenting the length of a row or column."
-#     comptime remainder: FixedInt = FixedInt.one - Self.step_size * (
-#         Self.samples_per_pixel - 1
-#     )
-#     """The remaining coverage units of which does not equal Self.step_size.
-
-#     Pixel coverage is handled via.:
-
-#     `first part, step_size, step_size, ..., step_size, last part`.
-
-#     N samples for X is 15 and Y is 17. This is so max coverage can be represented
-#     as 15 * 17 = 255 which is the most "equal" x and y coverage we can represent
-#     that cleanly multiplies to 255.
-
-#     For example if `Self.step_size` is `65536 / 15 = 4369 int`
-
-#     So each "sample row y" per pixel is 4369 units long.
-
-#     We fail to recover the original total pixel length since 4369 * 15 = 65535.
-
-#     We have some alternatives:
-#     - Deal with the end of the pixel being a 1 unit longer than the others
-#     Or
-#     - Place that "extra" unit to be in the center of the pixel instead.
-
-#     We opt for the second option. `remainder` is the "slightly larger" step size.
-#     We divide it in half and distribute it over the start and end of the pixel.
-#     """
-#     comptime first_step_size: FixedInt = Self.remainder / 2
-#     comptime last_step_start: FixedInt = Self.first_step_size + Self.step_size * (
-#         Self.samples_per_pixel - 1
-#     )
-#     """Start of the last subpixel row inside a pixel; Pixman calls this ``Y_FRAC_LAST``."""
-
-#     @staticmethod
-#     def coverage(x: Float32) -> Int:
-#         comptime if Self.n == 1:
-#             return 0
-#         else:
-#             return Self.coverage(FixedInt(x))
-
-#     @staticmethod
-#     def div_floor(a: FixedInt, b: FixedInt) -> FixedInt:
-#         """Pixman `DIV`: integer division rounded toward negative infinity."""
-#         var av = Int(a.value)
-#         var bv = Int(b.value)
-#         var q = av / bv
-#         var r = av % bv
-#         if r != 0:
-#             if (av < 0 and bv > 0) or (av > 0 and bv < 0):
-#                 q -= 1
-#         return FixedInt.cast(q)
-
-#     @staticmethod
-#     def ceil(x: FixedInt) -> FixedInt:
-#         var f = x.get_fractional_part()
-#         print("f", f)
-#         var i = floor(x)
-#         print("i", i)
-
-#         var sample_loc = Self.div_floor(
-#             f - Self.first_step_size + Self.step_size - FixedInt.e,
-#             Self.step_size,
-#         )
-#         print("sample_loc", sample_loc)
-#         sample_loc = sample_loc * Self.step_size + Self.first_step_size
-
-#         if sample_loc > Self.last_step_start:
-#             print("doing an adjustment")
-#             if Int(i) == 32767:
-#                 sample_loc = FixedInt.max_value
-#             else:
-#                 sample_loc = Self.first_step_size
-#                 i += FixedInt.one
-#         return i | sample_loc
-
-#     @staticmethod
-#     def floor(x: FixedInt) -> FixedInt:
-#         var f = x.get_fractional_part()
-#         var i = floor(x)
-
-#         var sample_loc = Self.div_floor(
-#             f - Self.first_step_size - FixedInt.e,
-#             Self.step_size,
-#         )
-#         sample_loc = sample_loc * Self.step_size + Self.first_step_size
-
-#         if sample_loc < Self.first_step_size:
-#             if Int(i) == 4294934528:
-#                 sample_loc = FixedInt.zero
-#             else:
-#                 sample_loc = Self.last_step_start
-#                 i -= FixedInt.one
-#         return i | sample_loc
-
-#     @staticmethod
-#     def coverage(x: FixedInt) -> Int:
-#         comptime if Self.n == 1:
-#             return 0
-#         else:
-#             # If x.frac() is 0:
-#             # (x.frac() + first part) / step size == 0
-#             # If x.frac() is 99 (like 5.99):
-#             # (x.frac() + first part) / step size == 17
-#             return Int(
-#                 (x.get_fractional_part() + Self.first_step_size)
-#                 / Self.step_size
-#             )
-
-#     def write_to(self, mut writer: Some[Writer]):
-#         writer.write(
-#             "(",
-#             "samples_per_pixel=",
-#             Self.samples_per_pixel,
-#             ", ",
-#             "step_size=",
-#             Self.step_size,
-#             ", ",
-#             "remainder=",
-#             Self.remainder,
-#             ", ",
-#             "first_step_size=",
-#             Self.first_step_size,
-#             ", ",
-#             "last_step_start=",
-#             Self.last_step_start,
-#             ", ",
-#             ")",
-#         )
-
-
-# comptime XPixelSampling = PixelSampling[1]
-# comptime YPixelSampling = PixelSampling[-1]
