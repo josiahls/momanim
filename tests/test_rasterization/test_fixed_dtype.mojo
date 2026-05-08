@@ -44,6 +44,8 @@ def test_FixedPoint16x16() raises:
     assert_equal(FixedPoint16x16.epsilon.value, 1)
     assert_equal(FixedPoint16x16.max_value.value, 2147483648)
     assert_equal(FixedPoint16x16.min_value.value, -2147483648)
+    assert_equal(FixedPoint16x16.max_int_value.value, 32768)
+    assert_equal(FixedPoint16x16.min_int_value.value, -32768)
 
 def test_FixedPoint16x16__init__Int() raises:
     # Test integrals
