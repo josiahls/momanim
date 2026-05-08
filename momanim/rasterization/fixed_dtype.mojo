@@ -12,6 +12,13 @@ from std.memory import memset_zero
 comptime ByteSize: Int = 8
 
 
+def _maximum_value[is_signed: Bool, size_bytes: Int]() -> Int:
+    comptime if is_signed:
+        return 2 ** (size_bytes * ByteSize - 1)
+    else:
+        return 2 ** (size_bytes * ByteSize)
+
+
 def _maximum_repr_value[dtype: DType]() -> Int:
     comptime if dtype.is_signed():
         return 2 ** (size_of[dtype]() * ByteSize - 1)
@@ -82,7 +89,12 @@ struct FixedDType[
     comptime max_frac_value = Self(
         raw_value=Self.one.value - Self.epsilon.value
     )
-
+    comptime max_int_value = Self(
+        raw_value=_maximum_value[Self.dtype.is_signed(), Self.int_bytes]()
+    )
+    comptime min_int_value = Self(
+        raw_value=0 if Self.dtype.is_unsigned() else -Self.max_int_value.value
+    )
     # TODO: Maybe support varying width?
     var value: Scalar[Self.dtype]
 
@@ -226,9 +238,11 @@ struct FixedDType[
     #     def __truediv__(self, other: Self) -> Self:
     #         return {self.value / other.value}
 
-    #     def __truediv__(self, other: Int) -> Self:
-    #         # TODO: There has to be a nicer way to handle this.
-    #         return {self.value / Scalar[Self.dtype](other)}
+    def __truediv__(self, other: Int) -> Self:
+        return {raw_value = self.value / Scalar[Self.dtype](other)}
+
+    def __mul__(self, other: Int) -> Self:
+        return {raw_value = self.value * Scalar[Self.dtype](other)}
 
     def __and__(self, other: Self) -> Self:
         return {raw_value = self.value & other.value}
@@ -264,9 +278,13 @@ struct FixedDType[
         return {raw_value = self.value | other.value}
 
 
-# int64 backing for intermediates (see Pixman `pixman_fixed_48_16_t`), same **16 fractional
-# bits** as `FixedInt`: second param is **bytes** of fractional part → 2 * 8 = 16 bits.
 comptime FixedPoint48x16 = FixedDType[DType.int64, 6]
+"""A 48x16 FixedPoint integer.
+
+Where:
+- The first 48 bits are the integral
+- The last 16 bits are the fractional
+"""
 comptime FixedPoint16x16 = FixedDType[DType.int32]
 """A 16x16 FixedPoint integer.
 
@@ -276,5 +294,4 @@ Where:
 """
 
 comptime FixedInt = FixedPoint16x16
-"""The default fixed int representation.
-"""
+"""The default fixed int representation."""
