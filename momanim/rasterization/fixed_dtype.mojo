@@ -201,6 +201,8 @@ struct FixedDType[
             if (self.value < 0) == (other.value < 0):
                 return self.floor_div_raw(other)
 
+        # TODO: Should this be a standalone function?
+
         # +1 or -1 depending on the sign of b.
         var sign = 1 - Scalar[Self.dtype](other.value < 0) * 2
         return (self.value - other.value + sign) / other.value
@@ -227,19 +229,11 @@ struct FixedDType[
     def __mod__(self, other: Self) -> Self:
         return {raw_value = self.value % other.value}
 
-    #     def slow_div(self, other: Self) -> Self:
-    #         """Floating point division of FixedPoint values.
-
-    #         This is explicit instead of `__div__` since the purpose of FixedPoint
-    #         values is fast integer arithmetic operations.
-    #         """
-    #         return Self(Float64(self.value) / Float64(other.value))
-
-    #     def __truediv__(self, other: Self) -> Self:
-    #         return {self.value / other.value}
-
     def __truediv__(self, other: Int) -> Self:
         return {raw_value = self.value / Scalar[Self.dtype](other)}
+
+    def __truediv__(self, other: Self) -> Self:
+        return {raw_value = self.value / other.value}
 
     def __mul__(self, other: Int) -> Self:
         return {raw_value = self.value * Scalar[Self.dtype](other)}

@@ -64,6 +64,9 @@ struct PixelSampling[offset: Int, n: Int = 8](Writable):
         # Get which sample bin it is located in. e.g:
         # X axis has bins: [0, 17]
         # biased toward the ceiling bin instead of the floor.
+
+        # TODO: it would probably be easier to just have these operate as
+        # ints...
         var sample_bin = (
             (f - Self.first_step_size) + Self.step_size - FixedInt.epsilon
         ).negative_floor_div_raw(Self.step_size)
@@ -81,7 +84,7 @@ struct PixelSampling[offset: Int, n: Int = 8](Writable):
                 # TODO: Should we add an assertion here? I'm not sure I want this
                 # just "setting at the sample loc". If this happens there is
                 # probably something worst happening.
-                sample_loc = FixedInt.max_value
+                sample_loc = FixedInt.max_frac_value
             else:
                 # Wrap around to the next pixel, starting at that pixel's
                 # first step loc.
@@ -97,7 +100,6 @@ struct PixelSampling[offset: Int, n: Int = 8](Writable):
         var f = x.frac()
         var i = floor(x)
         # Reference the comments in the ceil function for intuition.
-
         var sample_bin = FixedInt(
             raw_value=(
                 f - FixedInt.epsilon - Self.first_step_size
@@ -110,6 +112,7 @@ struct PixelSampling[offset: Int, n: Int = 8](Writable):
 
         if sample_loc < Self.first_step_size:
             if i.value == min_allowable_value:
+                # TODO: Ref `ceil`, same issue.
                 sample_loc = FixedInt.zero
             else:
                 sample_loc = Self.last_step_start
