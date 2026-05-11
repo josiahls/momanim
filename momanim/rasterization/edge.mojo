@@ -89,9 +89,9 @@ struct EdgeErrorTrackerAndStepper:
     ):
         # Pixman `_pixman_edge_multi_init`: ne = n * dx, step_x_ = n * stepx,
         # then if ne > 0: nx = ne / dy; ne -= nx * dy; step_x += nx * signdx.
-        var dx_i = Int(dx)
-        var dy_i = Int(dy)
-        var step_x_i = Int(step_x)
+        # var dx_i = Int(dx)
+        # var dy_i = Int(dy)
+        # var step_x_i = Int(step_x)
 
         var ne: FixedPoint48x16 = FixedPoint48x16(dx) * y_steps
         var step_x_ = step_x * y_steps

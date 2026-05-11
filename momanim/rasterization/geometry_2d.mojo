@@ -3,6 +3,8 @@
 All pimitives are `size ** 2` for SIMD compat.
 """
 from std.math import Floorable, floor, hypot
+from std.memory import memset_zero
+from momanim.rasterization.fixed_dtype import FixedInt
 
 
 @fieldwise_init
@@ -269,11 +271,7 @@ struct FixedPoint2d(Copyable, Movable, Writable):
 
     def real_to_string(self) -> String:
         return (
-            "("
-            + String(self.x.to_real_float())
-            + ", "
-            + String(self.y.to_real_float())
-            + ")"
+            "(" + String(Float64(self.x)) + ", " + String(Float64(self.y)) + ")"
         )
 
 
@@ -286,6 +284,10 @@ struct FixedPointEdge2d(Copyable, Movable, Writable):
         self.p0 = FixedPoint2d(p0)
         self.p1 = FixedPoint2d(p1)
 
+    def __init__(out self, x0: Float32, y0: Float32, x1: Float32, y1: Float32):
+        self.p0 = FixedPoint2d(Point2d(x0, y0))
+        self.p1 = FixedPoint2d(Point2d(x1, y1))
+
     def __init__(out self, edge: Vector2d):
         self.p0 = FixedPoint2d(edge.p1)
         self.p1 = FixedPoint2d(edge.p2)
@@ -295,6 +297,14 @@ struct FixedPointEdge2d(Copyable, Movable, Writable):
 
     def swap(self) -> Self:
         return {self.p1.copy(), self.p0.copy()}
+
+    def y_top(self) -> FixedInt:
+        """Get the top most (lowest value) y."""
+        return min(self.p0.y, self.p1.y)
+
+    def y_bot(self) -> FixedInt:
+        """Get the bottom most (highest value) y."""
+        return max(self.p0.y, self.p1.y)
 
 
 @fieldwise_init
