@@ -67,6 +67,17 @@ def test_Edge2dWalker_q1_0_0_10_10_y_start() raises:
     assert_equal(w.error_remainder_step, 0)
     assert_equal(w.step_x_remainder, 4370)
 
+    print("stepping 1 y unit forward")
+    w.step_n_units(FixedInt(from_int=1))
+    # Move forward 1 y unit
+    assert_equal(w.x, 393216)
+    assert_equal (w.error, -655360)
+    print("stepping 1 y unit backward")
+    w.step_n_units(FixedInt(from_int=-1))
+    # Move backward 1 y unit
+    assert_equal(w.x, 327679)
+    assert_equal (w.error, 0)
+
 
 def test_Edge2dWalker_q1_0_0_10_3() raises:
     "Walk along a third y slope. Results in sub pixel error."

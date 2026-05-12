@@ -5,9 +5,21 @@ from momanim.rasterization.subpixel_sampling import (
     YPixelSampling,
 )
 
+# TODO: At some point parameterize all of this.
+
 
 @fieldwise_init
 struct Edge2dWalker(Movable, Writable):
+    """Defines required integer primitives to step along an edge.
+
+    Note: The types are not FixedPoint themselves since the walker makes no
+    effort to maintain scales during division or multiplication, effectively
+    treating these values as very large integrals. Thus, to aovid confusion,
+    they are stored as the whole integral of whatever fixed point dtype is being
+    used.
+
+    """
+
     comptime IntType = Scalar[FixedInt.dtype]
     comptime BiggerIntType = Scalar[DType.int64]
 
@@ -17,8 +29,9 @@ struct Edge2dWalker(Movable, Writable):
     "The total change in the y axis."
     var sign_dx: Self.IntType
     var x_per_unit_dy: Self.IntType
-    """Whole-number (integer) part of total x delta over total y delta, in raw fixed-point\
-    units (same encoding as the endpoints). 
+    """Whole-number (integer) part of total x delta over total y delta.
+    
+    In raw fixed-point units (same encoding as the endpoints). 
     
     Not “x step per 1 raw increment of y” by itself;
     see Pixman ``e->stepx`` / remainder.
@@ -111,10 +124,9 @@ struct Edge2dWalker(Movable, Writable):
 
     def __init__(out self, edge: FixedPointEdge2d, start_y: FixedInt):
         self = Self(edge)
-        self.step(start_y - edge.y_top())
+        self.step_n_units(start_y - edge.y_top())
 
-    def step(mut self, n_units: FixedInt):
-        print("step", n_units)
+    def step_n_units(mut self, n_units: FixedInt):
         self.x += n_units.value * self.x_per_unit_dy
 
         var unit_error = Self.BiggerIntType(self.error) + Self.BiggerIntType(
@@ -139,3 +151,19 @@ struct Edge2dWalker(Movable, Writable):
                 var units_x = (-unit_error) / dy
                 self.error = Self.IntType(unit_error + units_x * dy)
                 self.x -= Self.IntType(units_x) * self.sign_dx
+
+    def reset_error(mut self):
+        "If error > 0, then we increment x and reset error."
+        if self.error > 0:
+            self.error -= self.dy
+            self.x += self.sign_dx
+
+    def step(mut self):
+        self.x += self.step_x
+        self.error += self.error_step
+        self.reset_error()
+
+    def step_remainder(mut self):
+        self.x += self.step_x_remainder
+        self.error += self.error_remainder_step
+        self.reset_error()
