@@ -53,7 +53,7 @@ def test_Edge2dWalker_q1_0_0_10_10_y_start() raises:
     "Walk along a half y slope."
     var edge = FixedPointEdge2d(0, 0, 10, 10)
     
-    var w = Edge2dWalker(edge, FixedInt(5))
+    var w = Edge2dWalker(edge, FixedInt(from_int=5))
     assert_equal(w.x, 327680)
     assert_equal(w.dy, 655360)
     assert_equal(w.x_per_unit_dy, 1)

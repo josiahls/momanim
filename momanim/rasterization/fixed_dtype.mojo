@@ -74,12 +74,12 @@ struct FixedDType[
     Cast to Float64 since `__mul__` is performed on Floatables.
     """
 
-    comptime one = Self(1)
+    comptime one = Self(from_int=1)
     """One value of `Self`.
     
     For example 16x16, 1 equals 65535.
     """
-    comptime zero = Self(0)
+    comptime zero = Self(from_int=0)
     "Zero value of `Self`."
     comptime epsilon = Self(raw_value=1)
     "Smallest representable value of `Self`."
@@ -114,29 +114,29 @@ struct FixedDType[
         """
         self.value = raw_value
 
-    def __init__(out self, value: Int):
-        """Creates `Self` from `value` where `value` is an Int.
+    def __init__(out self, *, from_int: Int):
+        """Creates `Self` from `from_int` where `from_int` is an Int.
 
         The value is shifted left by `self.frac_bits`.
         """
-        if value == 0:
-            self = Self(raw_value=value)
+        if from_int == 0:
+            self = Self(raw_value=from_int)
         else:
-            self = Self(raw_value=value << self.frac_bits)
+            self = Self(raw_value=from_int << self.frac_bits)
 
-    def __init__(out self, value: Float32):
-        """Creates `Self` from `value` where `value` is a Float.
+    def __init__(out self, *, from_float: Float32):
+        """Creates `Self` from `from_float` where `from_float` is a Float.
 
         The value is scaled by `Self.frac_scale` then cast to `Self.dtype`.
 
         Note this can truncate floating point values.
         """
-        if value == 0.0:
+        if from_float == 0.0:
             self = Self(raw_value=0)
         else:
             # TODO: Do we want to require no truncation by checking the float value
             # size and then provide a API call for unsafe truncating?
-            self = Self(raw_value=Int(Float64(value) * Self.frac_scale))
+            self = Self(raw_value=Int(Float64(from_float) * Self.frac_scale))
 
     def __eq__(self, other: Self) -> Bool:
         return self.value == other.value

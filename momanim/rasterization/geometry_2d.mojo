@@ -263,8 +263,8 @@ struct FixedPoint2d(Copyable, Movable, Writable):
     var y: FixedInt
 
     def __init__(out self, p: Point2d):
-        self.x = FixedInt(p.x)
-        self.y = FixedInt(p.y)
+        self.x = FixedInt(from_float=p.x)
+        self.y = FixedInt(from_float=p.y)
 
     def __sub__(self, other: Self) -> Self:
         return {self.x - other.x, self.y - other.y}
@@ -331,8 +331,12 @@ struct FixedPointTrapezoid2d(Copyable, Movable, Writable):
         # assert b.y == c.y, "b.y != c.y"
         self.l = FixedPointEdge2d(a, b)
         self.r = FixedPointEdge2d(c, d)
-        self.top = FixedInt(a.y)  # We assert that a.y and d.y are the same.
-        self.bot = FixedInt(c.y)  # We assert that b.y and c.y are the same.
+        self.top = FixedInt(
+            from_float=a.y
+        )  # We assert that a.y and d.y are the same.
+        self.bot = FixedInt(
+            from_float=c.y
+        )  # We assert that b.y and c.y are the same.
 
     def __init__(out self, edge_0: Vector2d, edge_1: Vector2d):
         """
@@ -344,8 +348,8 @@ struct FixedPointTrapezoid2d(Copyable, Movable, Writable):
         """
         var top = min(edge_0.min_y(), edge_1.min_y())
         var bot = max(edge_0.max_y(), edge_1.max_y())
-        self.top = FixedInt(top)
-        self.bot = FixedInt(bot)
+        self.top = FixedInt(from_float=top)
+        self.bot = FixedInt(from_float=bot)
         self.l = FixedPointEdge2d(edge_0)
         self.r = FixedPointEdge2d(edge_1)
 
