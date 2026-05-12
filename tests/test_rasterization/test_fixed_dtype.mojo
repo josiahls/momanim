@@ -87,17 +87,17 @@ def test_FixedPoint16x16__add__() raises:
     assert_equal(FixedPoint16x16(from_int=1) + FixedPoint16x16(from_int=2), FixedPoint16x16(from_int=3))
     assert_equal(FixedPoint16x16(from_int=2) + FixedPoint16x16(from_int=1), FixedPoint16x16(from_int=3))
 
-def test_FixedPoint16x16_wide_mul() raises:
-    assert_equal(FixedPoint16x16(from_int=1).wide_mul[DType.int64](FixedPoint16x16(from_int=2)), FixedPoint16x16(from_int=2))
-    assert_equal(FixedPoint16x16(from_int=2).wide_mul[DType.int64](FixedPoint16x16(from_int=1)), FixedPoint16x16(from_int=2))
-    assert_equal(FixedPoint16x16(from_int=-1).wide_mul[DType.int64](FixedPoint16x16(from_int=2)), FixedPoint16x16(from_int=-2))
-    assert_equal(FixedPoint16x16(from_int=-2).wide_mul[DType.int64](FixedPoint16x16(from_int=1)), FixedPoint16x16(from_int=-2))
+def test_FixedPoint16x16_fixed_mul() raises:
+    assert_equal(FixedPoint16x16(from_int=1).fixed_mul[DType.int64](FixedPoint16x16(from_int=2)), FixedPoint16x16(from_int=2))
+    assert_equal(FixedPoint16x16(from_int=2).fixed_mul[DType.int64](FixedPoint16x16(from_int=1)), FixedPoint16x16(from_int=2))
+    assert_equal(FixedPoint16x16(from_int=-1).fixed_mul[DType.int64](FixedPoint16x16(from_int=2)), FixedPoint16x16(from_int=-2))
+    assert_equal(FixedPoint16x16(from_int=-2).fixed_mul[DType.int64](FixedPoint16x16(from_int=1)), FixedPoint16x16(from_int=-2))
 
-def test_FixedPoint16x16_wide_div() raises:
-    assert_equal(FixedPoint16x16(from_int=1).wide_div[DType.int64](FixedPoint16x16(from_int=2)), FixedPoint16x16(from_float=0.5))
-    assert_equal(FixedPoint16x16(from_int=2).wide_div[DType.int64](FixedPoint16x16(from_int=1)), FixedPoint16x16(from_int=2))
-    assert_equal(FixedPoint16x16(from_int=-1).wide_div[DType.int64](FixedPoint16x16(from_int=2)), FixedPoint16x16(from_float=-0.5))
-    assert_equal(FixedPoint16x16(from_int=-1).wide_div[DType.int64](FixedPoint16x16(from_int=-2)), FixedPoint16x16(from_float=0.5))
+def test_FixedPoint16x16_fixed_div() raises:
+    assert_equal(FixedPoint16x16(from_int=1).fixed_div[DType.int64](FixedPoint16x16(from_int=2)), FixedPoint16x16(from_float=0.5))
+    assert_equal(FixedPoint16x16(from_int=2).fixed_div[DType.int64](FixedPoint16x16(from_int=1)), FixedPoint16x16(from_int=2))
+    assert_equal(FixedPoint16x16(from_int=-1).fixed_div[DType.int64](FixedPoint16x16(from_int=2)), FixedPoint16x16(from_float=-0.5))
+    assert_equal(FixedPoint16x16(from_int=-1).fixed_div[DType.int64](FixedPoint16x16(from_int=-2)), FixedPoint16x16(from_float=0.5))
 
 def test_FixedPoint16x16_floor_div() raises:
     assert_equal(FixedPoint16x16(from_int=1).floor_div(FixedPoint16x16(from_int=2)), FixedPoint16x16(from_int=0))
@@ -185,9 +185,9 @@ def test_FixedPoint48x16__init__Int() raises:
 
 def test_FixedPoint48x16__init__raw_value() raises:
     # Test raw integrals
-    assert_equal(FixedPoint48x16(from_int=1).value, 1)
-    assert_equal(FixedPoint48x16(from_int=-1).value, -1)
-    assert_equal(FixedPoint48x16(from_int=0).value, 0)
+    assert_equal(FixedPoint48x16(raw_value=1).value, 1)
+    assert_equal(FixedPoint48x16(raw_value=-1).value, -1)
+    assert_equal(FixedPoint48x16(raw_value=0).value, 0)
 
 def test_FixedPoint48x16__init__Float32() raises:
     # Test floating point
@@ -223,15 +223,15 @@ def test_FixedPoint48x16__add__() raises:
     assert_equal(FixedPoint48x16(from_int=1) + FixedPoint48x16(from_int=2), FixedPoint48x16(from_int=3))
     assert_equal(FixedPoint48x16(from_int=2) + FixedPoint48x16(from_int=1), FixedPoint48x16(from_int=3))
 
-def test_FixedPoint48x16_wide_mul() raises:
-    assert_equal(FixedPoint48x16(from_int=1).wide_mul[DType.int128](FixedPoint48x16(from_int=2)), FixedPoint48x16(from_int=2))
-    assert_equal(FixedPoint48x16(from_int=2).wide_mul[DType.int128](FixedPoint48x16(from_int=1)), FixedPoint48x16(from_int=2))
+def test_FixedPoint48x16_fixed_mul() raises:
+    assert_equal(FixedPoint48x16(from_int=1).fixed_mul[DType.int128](FixedPoint48x16(from_int=2)), FixedPoint48x16(from_int=2))
+    assert_equal(FixedPoint48x16(from_int=2).fixed_mul[DType.int128](FixedPoint48x16(from_int=1)), FixedPoint48x16(from_int=2))
 
-def test_FixedPoint48x16_wide_div() raises:
-    assert_equal(FixedPoint48x16(from_int=1).wide_div[DType.int128](FixedPoint48x16(from_int=2)), FixedPoint48x16(from_float=0.5))
-    assert_equal(FixedPoint48x16(from_int=2).wide_div[DType.int128](FixedPoint48x16(from_int=1)), FixedPoint48x16(from_int=2))
-    assert_equal(FixedPoint48x16(from_int=-1).wide_div[DType.int128](FixedPoint48x16(from_int=2)), FixedPoint48x16(from_float=-0.5))
-    assert_equal(FixedPoint48x16(from_int=-1).wide_div[DType.int128](FixedPoint48x16(from_int=-2)), FixedPoint48x16(from_float=0.5))
+def test_FixedPoint48x16_fixed_div() raises:
+    assert_equal(FixedPoint48x16(from_int=1).fixed_div[DType.int128](FixedPoint48x16(from_int=2)), FixedPoint48x16(from_float=0.5))
+    assert_equal(FixedPoint48x16(from_int=2).fixed_div[DType.int128](FixedPoint48x16(from_int=1)), FixedPoint48x16(from_int=2))
+    assert_equal(FixedPoint48x16(from_int=-1).fixed_div[DType.int128](FixedPoint48x16(from_int=2)), FixedPoint48x16(from_float=-0.5))
+    assert_equal(FixedPoint48x16(from_int=-1).fixed_div[DType.int128](FixedPoint48x16(from_int=-2)), FixedPoint48x16(from_float=0.5))
 
 def test_FixedPoint48x16_floor_div() raises:
     assert_equal(FixedPoint48x16(from_int=1).floor_div(FixedPoint48x16(from_int=2)), FixedPoint48x16(from_int=0))

@@ -150,11 +150,11 @@ struct FixedDType[
     def __add__(self, other: Self) -> Self:
         return {raw_value = self.value + other.value}
 
-    def wide_mul[other_dtype: DType](self, other: Self) -> Self:
+    def fixed_mul[other_dtype: DType](self, other: Self) -> Self:
         """Performs fixed point multiplication.
 
         Multiplication is done via widing dtype, multiplying, and then shifting
-        back to the original dtype.
+        back (scaling) to the original dtype.
         """
         comptime assert (
             other_dtype.is_integral()
@@ -163,6 +163,8 @@ struct FixedDType[
             "Cannot widen multiply since `other_dtype` is equal or smaller "
             "than `Self.dtype`."
         )
+        # TODO: Need to handle other fixed point types that are of different
+        # scales.
         comptime IntBigger = Scalar[other_dtype]
         var result = IntBigger(self.value) * IntBigger(other.value)
         return {
@@ -170,7 +172,10 @@ struct FixedDType[
         }
 
     def floor_div(self, other: Self) -> Self:
-        """Integer division that rounds fractional portion towards zero."""
+        """Integer division that rounds fractional portion towards zero.
+
+        Performs fixed point division meaning the value will be scaled correctly.
+        """
         var result = self.floor_div_raw(other)
         return {raw_value = result << Scalar[Self.dtype](Self.frac_bits)}
 
@@ -182,7 +187,10 @@ struct FixedDType[
         return self.value / other.value
 
     def negative_floor_div(self, other: Self) -> Self:
-        """Integer division that rounds fractional portion towards -infinity."""
+        """Integer division that rounds fractional portion towards -infinity.
+
+        Performs fixed point division meaning the value will be scaled correctly.
+        """
         if (self.value < 0) == (other.value < 0):
             return self.floor_div(other)
 
@@ -207,11 +215,11 @@ struct FixedDType[
         var sign = 1 - Scalar[Self.dtype](other.value < 0) * 2
         return (self.value - other.value + sign) / other.value
 
-    def wide_div[other_dtype: DType](self, other: Self) -> Self:
+    def fixed_div[other_dtype: DType](self, other: Self) -> Self:
         """Performs fixed point division by widening to avoid truncation.
 
         Multiplication is done via widing dtype, multiplying, and then shifting
-        back to the original dtype.
+        back (scaling) to the original dtype.
         """
         comptime assert (
             other_dtype.is_integral()
@@ -220,6 +228,8 @@ struct FixedDType[
             "Cannot widen multiply since `other_dtype` is equal or smaller "
             "than `Self.dtype`."
         )
+        # TODO: Need to handle other fixed point types that are of different
+        # scales.
         comptime IntBigger = Scalar[other_dtype]
         var result = (
             IntBigger(self.value) << IntBigger(Self.frac_bits)
@@ -231,9 +241,6 @@ struct FixedDType[
 
     def __truediv__(self, other: Int) -> Self:
         return {raw_value = self.value / Scalar[Self.dtype](other)}
-
-    def __truediv__(self, other: Self) -> Self:
-        return {raw_value = self.value / other.value}
 
     def __mul__(self, other: Int) -> Self:
         return {raw_value = self.value * Scalar[Self.dtype](other)}
