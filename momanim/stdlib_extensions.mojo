@@ -5,8 +5,8 @@ trait Enumable(Equatable, ImplicitlyCopyable, Writable):
     comptime dtype = Int
 
     @implicit
-    fn __init__(out self, value: Self.dtype):
+    def __init__(out self, value: Self.dtype):
         ...
 
-    fn __init__(out self, enum: Self):
+    def __init__(out self, enum: Self):
         ...
