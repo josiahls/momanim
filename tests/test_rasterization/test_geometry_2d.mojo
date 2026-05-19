@@ -7,8 +7,8 @@ from std.testing import (
 )
 from std.math import floor
 
-from momanim.rasterization.geometry_2d import FixedPoint2d, FixedPointEdge2d, Edge2dWalker, Point2d
-
+from momanim.rasterization.geometry_2d import FixedPoint2d, FixedPointEdge2d, FixedPointTrapezoid2d, Point2d, Vector2d
+from momanim.rasterization.fixed_dtype import FixedInt
 
 
 def main() raises:

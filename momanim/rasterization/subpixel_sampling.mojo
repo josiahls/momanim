@@ -54,7 +54,7 @@ struct PixelSampling[offset: Int, n: Int = 8](Writable):
         comptime if Self.n == 1:
             return 0
         else:
-            return Self.coverage(FixedInt(x))
+            return Self.coverage(FixedInt(from_float=x))
 
     @staticmethod
     def ceil(x: FixedInt) -> FixedInt:
@@ -106,7 +106,7 @@ struct PixelSampling[offset: Int, n: Int = 8](Writable):
             ).negative_floor_div_raw(Self.step_size)
         )
         sample_loc = (
-            sample_bin.wide_mul[DType.int64](Self.step_size)
+            sample_bin.fixed_mul[DType.int64](Self.step_size)
             + Self.first_step_size
         )
 

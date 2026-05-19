@@ -138,6 +138,21 @@ struct FixedDType[
             # size and then provide a API call for unsafe truncating?
             self = Self(raw_value=Int(Float64(from_float) * Self.frac_scale))
 
+    # TODO: Decide if we really need this. I'd prefer not having implicit conversions.
+    # @implicit
+    # def __init__[value_dtype: DType, value_int_bytes: Int, value_frac_bytes: Int](
+    #     out self,
+    #     value: FixedDType[
+    #         dtype=value_dtype,
+    #         int_bytes=value_int_bytes,
+    #         frac_bytes=value_frac_bytes
+    #     ],
+    # ):
+    #     comptime assert size_of[Self.dtype]() == size_of[value_dtype]()
+    #     comptime assert Self.int_bytes == value_int_bytes
+    #     comptime assert Self.frac_bytes == value_frac_bytes
+    #     self = Self(raw_value=Scalar[Self.dtype](value.value))
+
     def __eq__(self, other: Self) -> Bool:
         return self.value == other.value
 
@@ -258,6 +273,9 @@ struct FixedDType[
     def __float__(self) -> Float64:
         "Returns the non-fixed point floating point value of the fixed point value."
         return Float64(self.value) / Self.frac_scale
+
+    def real_to_string[round_places: Int = 2](self) -> String:
+        return String(round(Float64(self), round_places))
 
     def frac(self) -> Self:
         """Returns only the fractional part of the value."""
