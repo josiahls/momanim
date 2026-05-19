@@ -12,10 +12,12 @@ from std.testing import TestSuite
 from momanim.utils.color import WHITE, RED
 from std.time import perf_counter_ns, time_function
 from std.memory import memset_zero
-from momanim.rasterization.fixed_point  import MaskImage
-from momanim.rasterization.edge  import rasterize_edge
-from momanim.rasterization.fixed_point  import (
+from momanim.rasterization.image  import MaskImage
+# from momanim.rasterization.edge  import rasterize_edge
+from momanim.rasterization.fixed_dtype  import (
     FixedInt,
+)
+from momanim.rasterization.geometry_2d  import (
     FixedPointEdge2d,
     FixedPointTrapezoid2d,
 )
@@ -69,10 +71,10 @@ def write_frame(frame: MaskImage, path: Path) raises:
         w=UInt(frame.width),
         h=UInt(frame.height),
         ch=1,
-        ptr=frame.data,
-        size=frame.linesize * frame.height * 1,
+        ptr=frame.buffer,
+        size=frame.line_size * frame.height * 1,
         color_space=ColorSpace.GREY_8,
-        line_size=UInt(frame.linesize),
+        line_size=UInt(frame.line_size),
     )
     image_write(image, path)
 
@@ -81,7 +83,7 @@ def test_draw_vector_perfect_angles() capturing raises:
     var w = 50
     var h = 50
 
-    var frame = MaskImage(w, h)
+    var frame = MaskImage(0, w, h)
 
     var p2s = [
         ((25.0, 25.0), (49.0, 49.0)),
@@ -114,7 +116,7 @@ def test_draw_vector_imperfect_angles() capturing raises:
     var w = 50
     var h = 50
 
-    var frame = MaskImage(w, h)
+    var frame = MaskImage(0, w, h)
 
     var p2s = [
         ((25.0, 25.0), (37.0, 49.0)),
@@ -147,7 +149,7 @@ def test_draw_vector_basic() capturing raises:
     var w = 100
     var h = 100
 
-    var frame = MaskImage(w, h)
+    var frame = MaskImage(0, w, h)
 
     # var p2s = [
     #     ((0.0, 0.0), (99.0, 9.0)),
@@ -172,7 +174,7 @@ def test_draw_vector_trap() capturing raises:
     var w = 100
     var h = 100
 
-    var frame = MaskImage(w, h)
+    var frame = MaskImage(0, w, h)
 
     var trapezoid = FixedPointTrapezoid2d(
         a=Point2d(cast_x=5.0, cast_y=5.0),

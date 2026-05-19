@@ -59,7 +59,9 @@ struct Edge2dWalker(Movable, Writable):
         var dx = mag.x.value
         self.x = edge.p0.x.value
         self.dy = mag.y.value
-        assert self.dy >= 0, "`dy` magnitude must be positive."
+        assert self.dy >= 0, "`dy` magnitude must be positive, got: {}".format(
+            self.dy
+        )
         # NOTE: pixman uses some negation during division for
         # negative magnitudes. I beleive this is an artifact of
         # older architectures.

@@ -11,7 +11,7 @@ from std.testing import TestSuite
 from momanim.utils.color import WHITE, RED
 from std.time import perf_counter_ns, time_function
 from std.memory import memset_zero
-from momanim.rasterization.typing import MaskImage
+from momanim.rasterization.image import MaskImage
 from momanim.rasterization.edge import rasterize_edge
 from momanim.rasterization.typing import FixedInt, FixedPointEdge2d, FixedPointTrapezoid2d
 
