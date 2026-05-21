@@ -17,6 +17,7 @@ kgen.trace*
 # Build artifacts
 third_party/ffmpeg/build
 build
+test_pixman_cairo/build
 
 # Test Data
 test_data/
