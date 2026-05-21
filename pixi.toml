@@ -41,6 +41,7 @@ mav = "==0.0.4"
 pre-commit = ">=4.5.0,<5"
 git = ">=2.53.0"
 openssh = ">=9.0"
+pixman = ">=0.46.0"
 
 [feature.openh264.dependencies]
 openh264 = "==2.6.0"
@@ -113,6 +114,9 @@ cmd = "bash tools/configure_lldb.sh"
 ######################## Test Data Generation API ##############################
 [tasks.generate_test_videos]
 cmd = "bash tools/generate_test_videos.sh"
+
+[tasks.build_pixman]
+cmd = "bash tools/build_pixman.sh"
 
 ############################### Core API #######################################
 [tasks.configure]
