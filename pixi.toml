@@ -119,8 +119,8 @@ cmd = "bash tools/generate_test_videos.sh"
 [tasks.build_pixman]
 cmd = "bash tools/build_pixman.sh"
 
-[tasks.test_pixman_draw_vector_basic]
-cmd = "bash test_pixman/run_test_draw_vector_basic.sh"
+[tasks.test_pixman_cairo_draw_vector_basic]
+cmd = "bash test_pixman_cairo/run_test_draw_vector_basic.sh"
 
 ############################### Core API #######################################
 [tasks.configure]
