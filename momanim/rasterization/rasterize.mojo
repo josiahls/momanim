@@ -21,7 +21,7 @@ def rasterize_edge(
         image,
         trapezoid.l,
         trapezoid.r,
-        trapezoid.top if trapezoid.top >= FixedInt.zero else FixedInt.zero,
+        trapezoid.top,
         trapezoid.bot,
     )
 
@@ -30,10 +30,13 @@ def rasterize_edge(
     mut image: MaskImage,
     edge_l: FixedPointEdge2d,
     edge_r: FixedPointEdge2d,
-    top: FixedInt,
-    bot: FixedInt,
+    var top: FixedInt,
+    var bot: FixedInt,
 ):
+    top = top if top >= FixedInt.zero else FixedInt.zero
     var y = YPixelSampling.ceil(top)
+    if Int(bot) >= Int(image.height):
+        bot = FixedInt(from_int=image.height - 1)
     var snap_bot = YPixelSampling.floor(bot)
     var stride = image.line_size
     var width = image.width
@@ -42,58 +45,62 @@ def rasterize_edge(
     var fill_end = -1
     var fill_size = 0
     var line = image.buffer + Int(y) * stride
-
-    var swapped_edge_r = edge_r.swap()
     # print("edge_l", edge_l)
     # print("edge_r", edge_r)
     # print("swapped_edge_r", swapped_edge_r)
 
-    var l = Edge2dWalker(edge_l)
+    var l = Edge2dWalker(edge_l, y)
     # NOTE: l and r are together rotating CCW. swap the r points so both
     # point from top y to bot y.
-    var r = Edge2dWalker(edge_r.swap())
+    var r = Edge2dWalker(edge_r.swap(), y)
     var start_y = y - top
     # TODO: Wonder if this could be SIMD.
-    print("moving to start y", start_y, " (", Float64(start_y), ")")
-    print(
-        "y: ",
-        y,
-        "(",
-        Float64(y),
-        ")",
-        " top: ",
-        top,
-        " (",
-        Float64(top),
-        ")",
-        " bot: ",
-        bot,
-        " (",
-        Float64(bot),
-        ")",
-    )
-    l.step_n_units(start_y)
-    r.step_n_units(start_y)
+    # print("moving to start y", start_y, " (", Float64(start_y), ")")
+    # print(
+    #     "y: ",
+    #     y,
+    #     "(",
+    #     Float64(y),
+    #     ")",
+    #     " top: ",
+    #     top,
+    #     " (",
+    #     Float64(top),
+    #     ")",
+    #     " bot: ",
+    #     bot,
+    #     " (",
+    #     Float64(bot),
+    #     ")",
+    # )
+    # l.step_n_units(start_y)
+    # r.step_n_units(start_y)
 
     # TODO: We should be able to have this as a for loop no?
     while True:
         var lx = l.x
         var rx = r.x
-        print("initial lx: ", lx, "rx: ", rx)
+        # print("initial lx: ", lx, "rx: ", rx)
         if lx < 0:
             lx = 0
         if Int(FixedInt(raw_value=rx)) >= image.width:
             rx = r.IntType(FixedInt(from_int=image.width - 1).value)
 
-        print("lx: ", lx, "rx: ", rx)
+        # print("lx: ", lx, "rx: ", rx)
 
         if rx > lx:
             var lxi = Int(FixedInt(raw_value=lx))
             var rxi = Int(FixedInt(raw_value=rx))
             var lxs = XPixelSampling.coverage(FixedInt(raw_value=lx))
             var rxs = XPixelSampling.coverage(FixedInt(raw_value=rx))
-            print("lxs: ", lxs, "rxs: ", rxs)
-            print("lxi: ", lxi, "rxi: ", rxi)
+            # print("lxs: ", lxs, "rxs: ", rxs)
+            # print("lxi: ", lxi, "rxi: ", rxi)
+            # print("drawing line from ", lxi, " to ", rxi)
+
+            # print("line (before drawing): ", end=" ")
+            # for i in range(lxi, rxi):
+            #     print(line[i], end=" ")
+            # print()
 
             if lxi == rxi:
                 line[lxi] = UInt8(
@@ -109,13 +116,18 @@ def rasterize_edge(
                     )
                 )
                 lxi += 1
+                # TODO: pixman has a if statement: if (rxi - lxi > 4)
+                # that does a write optimziation. We can revisit this when trying
+                # to optimize since Mojo should make it far cleaner via SIMD.
                 for i in range(rxi - lxi):
-                    line[lxi + i] = UInt8(255)
+                    line[lxi + i] = UInt8(
+                        min(
+                            Int(255),
+                            Int(line[lxi + i])
+                            + Int(XPixelSampling.samples_per_axis),
+                        )
+                    )
                 line[rxi] = UInt8(min(Int(255), Int(line[rxi]) + Int(rxs)))
-                if y >= snap_bot:
-                    break
-        else:
-            pass
 
         if y >= snap_bot:
             break
@@ -124,9 +136,12 @@ def rasterize_edge(
             y = y + YPixelSampling.step_size
             l.step()
             r.step()
+            # print("### Y step")
         else:
             y = y + YPixelSampling.step_remainder
             l.step_remainder()
             r.step_remainder()
 
             line += stride
+            # print('stopping early')
+            # break
