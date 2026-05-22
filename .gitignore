@@ -18,6 +18,9 @@ kgen.trace*
 third_party/ffmpeg/build
 build
 test_pixman_cairo/build
+third_party/pixman/build
+third_party/cairo/build
+third_party/install
 
 # Test Data
 test_data/

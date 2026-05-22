@@ -41,9 +41,15 @@ mav = "==0.0.4"
 pre-commit = ">=4.5.0,<5"
 git = ">=2.53.0"
 openssh = ">=9.0"
-pixman = ">=0.46.0"
-cairo = ">=1.18.0"
 pillow = ">=10.0"
+
+# Used for building pixman and cairo.
+meson = ">=1.4"
+ninja = "*"
+pkg-config = "*"
+zlib = "*"
+libpng = "*"
+
 
 [feature.openh264.dependencies]
 openh264 = "==2.6.0"
@@ -72,7 +78,12 @@ cmd = [
 ]
 
 [activation.env]
-LIBRARY_PATH = "$CONDA_PREFIX/lib:$LIBRARY_PATH"
+PIXMAN_PREFIX = "$PIXI_PROJECT_ROOT/third_party/install/pixman"
+CAIRO_PREFIX = "$PIXI_PROJECT_ROOT/third_party/install/cairo"
+PKG_CONFIG_PATH = "$CAIRO_PREFIX/lib/pkgconfig:$PIXMAN_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
+LD_LIBRARY_PATH = "$CAIRO_PREFIX/lib:$PIXMAN_PREFIX/lib:$LD_LIBRARY_PATH"
+LIBRARY_PATH = "$CAIRO_PREFIX/lib:$PIXMAN_PREFIX/lib:$CONDA_PREFIX/lib:$LIBRARY_PATH"
+CPPFLAGS = "-I$PIXMAN_PREFIX/include/pixman-1 -I$CAIRO_PREFIX/include/cairo"
 MAV_INCLUDES = " -I . -I third_party/NuMojo"
 MAV_LINKERS = " -Xlinker -lavutil -Xlinker -lavcodec -Xlinker -lswresample -Xlinker -lswscale -Xlinker -lavformat -Xlinker -lm"
 MOJO_COMPILE_FLAGS = "$MAV_LINKERS $MAV_INCLUDES"
@@ -119,8 +130,31 @@ cmd = "bash tools/generate_test_videos.sh"
 
 [tasks.build_pixman]
 cmd = "bash tools/build_pixman.sh"
+inputs = [
+    "tools/build_pixman.sh",
+    "tools/clone_pixman.sh",
+    "third_party/pixman/meson.build",
+    "third_party/pixman/pixman/**",
+]
+outputs = ["third_party/install/pixman/lib/libpixman-1.so"]
+
+[tasks.build_cairo]
+cmd = "bash tools/build_cairo.sh"
+depends-on = ["build_pixman"]
+inputs = [
+    "tools/build_cairo.sh",
+    "tools/clone_cairo.sh",
+    "third_party/cairo/meson.build",
+    "third_party/cairo/meson.options",
+    "third_party/cairo/src/**",
+]
+outputs = ["third_party/install/cairo/lib/libcairo.so"]
+
+[tasks.build_graphics]
+cmd = "bash tools/build_graphics.sh"
 
 [tasks.test_pixman_cairo_draw_vector_basic]
+depends-on = ["build_cairo"]
 cmd = "bash test_pixman_cairo/run_test_draw_vector_basic.sh"
 
 ############################### Core API #######################################
