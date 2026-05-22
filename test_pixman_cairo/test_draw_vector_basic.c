@@ -5,8 +5,8 @@
 #include <cairo.h>
 #include <stdio.h>
 
-#define W 100
-#define H 100
+#define W 10
+#define H 10
 
 int
 main(void)
@@ -32,11 +32,11 @@ main(void)
 
     cairo_set_antialias(cr, CAIRO_ANTIALIAS_GRAY);
     cairo_set_line_width(cr, 1.0);
-    cairo_set_line_cap(cr, CAIRO_LINE_CAP_SQUARE);
-    cairo_set_line_join(cr, CAIRO_LINE_JOIN_MITER);
+    // cairo_set_line_cap(cr, CAIRO_LINE_CAP_SQUARE);
+    // cairo_set_line_join(cr, CAIRO_LINE_JOIN_MITER);
     cairo_set_source_rgba(cr, 0, 0, 0, 1);
     cairo_move_to(cr, 0.0, 0.0);
-    cairo_line_to(cr, 99.0, 9.0);
+    cairo_line_to(cr, 9.0, 9.0);
     cairo_stroke(cr);
 
     if (cairo_status(cr) != CAIRO_STATUS_SUCCESS) {

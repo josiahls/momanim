@@ -111,26 +111,31 @@ def test_draw_trapezoid() capturing raises:
 
 
 def test_draw_vector_basic() capturing raises:
-    var w = 100
-    var h = 100
+    var h = 10
+    var w = 10
 
     var frame = MaskImage(0, w, h)
 
     var p2s = [
-        ((0.0, 0.0), (99.0, 9.0)),
+        ((0.0, 0.0), (9.0, 9.0)),
     ]
     for vec in p2s:
         var v = Vector2d(
             p1=Point2d(cast_x=vec[0][0], cast_y=vec[0][1]),
             p2=Point2d(cast_x=vec[1][0], cast_y=vec[1][1]),
         )
-        var trapezoids = FixedPointTrap2d.from_line(v, 0.5)
-        print("trapezoids.l", trapezoids[0].l.vector_2d[2]())
-        print("trapezoids.r", trapezoids[0].r.vector_2d[2]())
-        print("trapezoids.top", trapezoids[0].top)
-        print("trapezoids.bot", trapezoids[0].bot)
-        for trapezoid in trapezoids:
+        var trapezoids = FixedPointTrap2d.from_line(v, 1)
+        for i, trapezoid in enumerate(trapezoids):
+            # if i == 0:
+            #     # Skip the first trap for now since it barely updates the image
+            #     continue
+
+            # print("trapezoid.l", trapezoid.l.vector_2d[2]())
+            # print("trapezoid.r", trapezoid.r.vector_2d[2]())
+            # print("trapezoid.top", trapezoid.top)
+            # print("trapezoid.bot", trapezoid.bot)
             rasterize_edge(frame, trapezoid)
+            # break
 
     write_frame(frame, Path("test_data/test_rasterize/test_draw_vector_basic.png"))
 
@@ -140,7 +145,7 @@ def main() raises:
     # test_draw_vector_basic_color()
     # test_tessalation()
     # test_draw_vector_quarter_circle_segments()
-    test_draw_trapezoid()
-    # print('test_draw_vector_basic', Float64(time_function[test_draw_vector_basic]()) / 1_000_000_000.0, "seconds")
+    # test_draw_trapezoid()
+    print('test_draw_vector_basic', Float64(time_function[test_draw_vector_basic]()) / 1_000_000_000.0, "seconds")
     # print('test_draw_vector_perfect_angles', Float64(time_function[test_draw_vector_perfect_angles]()) / 1_000_000_000.0, "seconds")
     # print('test_draw_vector_imperfect_angles', Float64(time_function[test_draw_vector_imperfect_angles]()) / 1_000_000_000.0, "seconds")
