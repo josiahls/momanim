@@ -43,6 +43,7 @@ git = ">=2.53.0"
 openssh = ">=9.0"
 pixman = ">=0.46.0"
 cairo = ">=1.18.0"
+pillow = ">=10.0"
 
 [feature.openh264.dependencies]
 openh264 = "==2.6.0"
