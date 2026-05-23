@@ -148,13 +148,9 @@ outputs = [
     "third_party/cairo/build/perf/cairo-perf-micro",
 ]
 
-[tasks.build_graphics]
-cmd = "bash tools/build_graphics.sh"
-depends-on = ["build_cairo"]
-
 [tasks.cairo_perf_micro]
 depends-on = ["build_cairo"]
-cmd = "bash tools/run_cairo_perf_micro.sh {{ filter }}"
+cmd = "AIRO_PERF_OUTPUT=1  bash tools/run_cairo_perf_micro.sh {{ filter }}"
 args = [{ arg = "filter", default = "" }]
 
 [tasks.test_pixman_cairo_draw_vector_basic]
