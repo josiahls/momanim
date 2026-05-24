@@ -4,7 +4,7 @@ All pimitives are `size ** 2` for SIMD compat.
 """
 from std.math import Floorable, floor, hypot
 from std.memory import memset_zero
-from momanim.rasterization.fixed_dtype import FixedInt
+from momanim.pix_forge.fixed_dtype import FixedInt
 
 
 @fieldwise_init

@@ -1,6 +1,6 @@
-from momanim.rasterization.fixed_dtype import FixedInt
-from momanim.rasterization.geometry_2d import FixedPointEdge2d
-from momanim.rasterization.subpixel_sampling import (
+from momanim.pix_forge.fixed_dtype import FixedInt
+from momanim.pix_forge.geometry_2d import FixedPointEdge2d
+from momanim.pix_forge.subpixel_sampling import (
     XPixelSampling,
     YPixelSampling,
 )
