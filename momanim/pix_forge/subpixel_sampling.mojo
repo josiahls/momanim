@@ -1,5 +1,5 @@
 from std.math import floor
-from momanim.rasterization.fixed_dtype import (
+from momanim.pix_forge.fixed_dtype import (
     FixedDType,
     FixedPoint16x16,
     FixedPoint48x16,

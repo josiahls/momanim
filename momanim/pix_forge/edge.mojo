@@ -1,4 +1,4 @@
-from momanim.rasterization.fixed_point import (
+from momanim.pix_forge.fixed_point import (
     MaskImage,
     FixedInt,
     FixedPointEdge2d,

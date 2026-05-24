@@ -1,16 +1,16 @@
-from momanim.rasterization.image import MaskImage
-from momanim.rasterization.geometry_2d import (
+from momanim.pix_forge.image import MaskImage
+from momanim.pix_forge.geometry_2d import (
     FixedPointEdge2d,
 )
-from momanim.rasterization.fixed_point_trap_2d import FixedPointTrap2d
+from momanim.pix_forge.fixed_point_trap_2d import FixedPointTrap2d
 
-from momanim.rasterization.subpixel_sampling import (
+from momanim.pix_forge.subpixel_sampling import (
     XPixelSampling,
     YPixelSampling,
 )
-from momanim.rasterization.fixed_dtype import FixedInt, FixedPoint48x16
+from momanim.pix_forge.fixed_dtype import FixedInt, FixedPoint48x16
 from std.math import align_up, align_down
-from momanim.rasterization.walkers import Edge2dWalker
+from momanim.pix_forge.walkers import Edge2dWalker
 
 
 def rasterize_edge(

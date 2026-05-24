@@ -4,8 +4,8 @@ All pimitives are `size ** 2` for SIMD compat.
 """
 from std.math import Floorable, floor, hypot
 from std.memory import memset_zero
-from momanim.rasterization.fixed_dtype import FixedInt
-from momanim.rasterization.geometry_2d import (
+from momanim.pix_forge.fixed_dtype import FixedInt
+from momanim.pix_forge.geometry_2d import (
     FixedPointEdge2d,
     Point2d,
     Vector2d,
