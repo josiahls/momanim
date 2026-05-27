@@ -11,6 +11,8 @@ Reference implementation is taken from Cairo's perf tooling:
 from std.io.file import FileHandle
 from std.time import sleep, perf_counter_ns
 from std.logger.logger import Logger, DEFAULT_LEVEL
+from std.algorithm.reduction import mean
+from std.math import sqrt
 
 from momanim.pix_forge.context import PixForgeContext
 
@@ -122,14 +124,13 @@ comptime SummaryColumns = [
     PerfColumn("#", 3, prefix="[", postfix="]"),
     PerfColumn("backend.content", 12),
     PerfColumn("test-size", 28),
-    PerfColumn("ticks-per-ms", 1),
-    PerfColumn("time(ticks)", 1),
-    PerfColumn("min(ticks)", 1),
-    PerfColumn("min(ms)", 1),
-    PerfColumn("median(ms)", 1),
-    PerfColumn("stddev.", 1),
-    PerfColumn("iterations", 1),
-    PerfColumn("overhead", 1),
+    PerfColumn("min(ticks)", 12),
+    PerfColumn("min(ticks) = min(batch) / loops", 28, prefix="[", postfix="]"),
+    PerfColumn("min(ms)", 12),
+    PerfColumn("median(ms)", 12),
+    PerfColumn("stddev.", 6),
+    PerfColumn("batches", 2),
+    PerfColumn("overhead", 2),
 ]
 
 
@@ -155,12 +156,132 @@ struct SummaryHeader[o: Origin[mut=False]](Writable):
             materialize[col]().header(w)
 
 
-@fieldwise_init
-struct SummaryRow[o: Origin[mut=False]](Writable):
-    var perf: Pointer[Perf, Self.o]
+struct SummaryStats:
+    var min_ticks: PerfTime
+    var median_ticks: PerfTime
+    var std_dev: Float64
+    var batches: Int
+    var values: List[PerfTime]
+    # var sum: PerfTime
+    # var mean: PerfTime
+    # var q1: PerfTime
+    # var q3: PerfTime
+    # var iqr: PerfTime
+    # var outlier_min: PerfTime
+    # var outlier_max: PerfTime
 
-    def __init__(out self, ref[Self.o] perf: Perf):
+    # var min_valid: Int
+    # var num_valid: Int
+
+    def __init__(out self, var values: List[PerfTime]):
+        var num_values = len(values)
+        assert num_values > 0
+
+        self.min_ticks = values[0]
+        self.median_ticks = values[0]
+        self.std_dev = 0
+        self.batches = 1
+        if num_values == 1:
+            self.values = values^
+            return
+
+        var values_ptr = values.steal_data()
+
+        # NOTE: Comment taken from:
+        # https://gitlab.freedesktop.org/cairo/cairo.git 8e3ac5e4
+        # First, identify any outliers, using the definition of "mild
+        # outliers" from:
+        #
+        # 		http://en.wikipedia.org/wiki/Outliers
+        #
+        # Which is that outliers are any values less than Q1 - 1.5 * IQR
+        # or greater than Q3 + 1.5 * IQR where Q1 and Q3 are the first
+        # and third quartiles and IQR is the inter-quartile range (Q3 -
+        # Q1).
+        var num_valid = num_values
+        var starting_num_valid = num_values
+        var q1: PerfTime
+        var q3: PerfTime
+        var iqr: PerfTime
+        var outlier_min: PerfTime
+        var outlier_max: PerfTime
+        var min_valid: Int
+        var i: Int = -1
+        sort(Span(ptr=values_ptr, length=num_values))
+
+        while num_valid != num_values or i == -1:
+            # NOTE: Expanding on above, this is specifically Tukey's fences
+            q1 = values_ptr[1 * num_values / 4]
+            q3 = values_ptr[3 * num_values / 4]
+            iqr = q3 - q1  # inter quartile range
+            outlier_min = q1 - 3 * iqr / 2
+            outlier_max = q3 + 3 * iqr / 2
+            i = 0
+            while i < num_values and values_ptr[i] < outlier_min:
+                i += 1
+
+            min_valid = i
+
+            i = 0
+            while i < num_values and values_ptr[i] <= outlier_max:
+                i += 1
+
+            num_valid = i - min_valid
+            assert num_valid != 0, "Unable to find any valid stats."
+            values_ptr += min_valid
+            logger.debug(
+                "SummaryStat Refinement: ",
+                t"q1={q1},q3={q3},iqr={iqr},outlier_min={outlier_min}",
+                t"outlier_max={outlier_max},(original)num_valid={starting_num_valid}",
+                t"(narrowed)num_valid={num_valid}",
+            )
+
+        self.values = List[PerfTime](capacity=num_valid)
+        for i in range(num_valid):
+            self.values.append(values_ptr[i]^)
+
+        self.batches = num_valid
+        self.min_ticks = self.values[0]
+        self.median_ticks = self.values[num_valid / 2]
+
+        def std_dev(values: List[PerfTime]) -> Float64:
+            try:
+                var mean_ticks = Float64(mean(values))
+
+                def delta(v: PerfTime) -> Float64:
+                    return (Float64(v) - mean_ticks) / mean_ticks
+
+                var deltas = List[Float64](capacity=len(values))
+                for v in values:
+                    deltas.append(delta(v) ** 2)
+
+                assert len(deltas) > 0, "No deltas to calculate std dev."
+                return sqrt(mean(deltas))
+            except e:
+                logger.warning("Stat calc failed: ", e)
+                return 0
+
+        self.std_dev = std_dev(self.values)
+
+    @staticmethod
+    def ticks_to_ms(v: PerfTime) -> PerfTime:
+        # TODO: should this be Float64?
+        return PerfTime(v / 100_000)
+
+
+@fieldwise_init
+struct SummaryRow[o1: Origin[mut=False], o2: Origin[mut=False]](Writable):
+    var perf: Pointer[Perf, Self.o1]
+    var stats: Pointer[SummaryStats, Self.o2]
+
+    def __init__(
+        out self, ref[Self.o1] perf: Perf, ref[Self.o2] stats: SummaryStats
+    ):
         self.perf = Pointer(to=perf)
+        self.stats = Pointer(to=stats)
+
+    def tick_to_ms(self, tick: PerfTime) -> Float64:
+        return Float64(tick) / 1000000.0
 
     def write_to(self, mut w: Some[Writer]):
         ref perf = self.perf[]
@@ -168,17 +289,24 @@ struct SummaryRow[o: Origin[mut=False]](Writable):
             var column_map = materialize[SummaryColumnMap]()
             ref target = perf.target.unsafe_value()
             try:
+                var min_ticks = self.stats[].min_ticks
+                var median_ticks = self.stats[].median_ticks
                 column_map["#"].row(w, perf.test_number)
                 column_map["backend.content"].row(w, "someimage")
-                column_map["test-size"].row(w, perf.size)
-                column_map["ticks-per-ms"].row(w, 0.0)
-                column_map["time(ticks)"].row(w, 0.0)
-                column_map["min(ticks)"].row(w, 0.0)
-                column_map["min(ms)"].row(w, 0.0)
-                column_map["median(ms)"].row(w, 0.0)
-                column_map["stddev."].row(w, 0.0)
-                column_map["iterations"].row(w, perf.iterations)
-                column_map["overhead"].row(w, 0.0)
+                column_map["test-size"].row(w, target.name)
+                column_map["min(ticks)"].row(w, min_ticks)
+                column_map["min(ticks) = min(batch) / loops"].row(
+                    w, "{} / {}".format(min_ticks, perf.loops)
+                )
+                column_map["min(ms)"].row(
+                    w, SummaryStats.ticks_to_ms(min_ticks)
+                )
+                column_map["median(ms)"].row(
+                    w, SummaryStats.ticks_to_ms(median_ticks)
+                )
+                column_map["stddev."].row(w, round(self.stats[].std_dev, 3))
+                column_map["batches"].row(w, perf.batches)
+                column_map["overhead"].row(w, "na")
             except e:
                 w.write("formatting failure: ", String(e))
 
@@ -188,8 +316,8 @@ struct Perf(Movable, Writable):
     var summary_continuous: Bool
 
     # CLI options
-    var iterations: Int
-    var exact_iterations: Bool
+    var batches: Int
+    var exact_batches: Bool
     var raw: Bool
     var list_only: Bool
     var observe: Bool
@@ -197,8 +325,8 @@ struct Perf(Movable, Writable):
     var exlude_names: List[StaticString]
     var exact_names: Bool
 
-    var ms_per_iteration: Float64
-    var fast_and_sloopy: Bool
+    var ms_per_batch: Float64
+    var fast_and_sloppy: Bool
 
     var tile_size: Int
 
@@ -209,18 +337,21 @@ struct Perf(Movable, Writable):
     # TODO: I think this is the current active target
     var test_number: Int
     var size: Int
+    var loops: Int
     # NOTE: Tried using Pointer, but passing the context from Perf into
     # subfunctions / perf functions was not possible do to the
     # origins.
     var context: UnsafePointer[PixForgeContext, MutExternalOrigin]
 
-    def __init__(out self, var context: PixForgeContext):
+    def __init__(
+        out self, var context: PixForgeContext, fast_and_sloppy: Bool = False
+    ):
         self.summary = None
         self.summary_continuous = False
 
         # CLI options
-        self.iterations = 10
-        self.exact_iterations = False
+        self.batches = 10
+        self.exact_batches = False
         self.raw = False
         self.list_only = False
         self.observe = False
@@ -228,8 +359,9 @@ struct Perf(Movable, Writable):
         self.exlude_names = List[StaticString]()
         self.exact_names = False
 
-        self.ms_per_iteration = 0.0
-        self.fast_and_sloopy = False
+        # Maximum ms allowable per batch.
+        self.ms_per_batch = 2000
+        self.fast_and_sloppy = fast_and_sloppy
 
         self.tile_size = 0
 
@@ -238,69 +370,10 @@ struct Perf(Movable, Writable):
         self.target = None
         self.test_number = 0
         self.size = 0
+        self.loops = 0
         self.context = UnsafePointer(to=context).unsafe_origin_cast[
             MutExternalOrigin
         ]()
-
-    def summary_row(self, mut writer: Some[Writer]) -> String:
-        if self.target:
-            ref target = self.target.unsafe_value()
-            var s = String("")  # We probabaly should just use the writer (?)
-            comptime for col in SummaryColumns:
-                s += String(col.name)
-            return s
-
-        return ""
-
-        # comptime for col in SummaryColumns:
-        #     writer.write(col.name)
-        # if self.target:
-        #     ref target = self.target.unsafe_value()
-        #     return Self.SummaryString.format(
-        #         self.test_number,
-        #         "someimage",
-        #         target.name,
-        #         0.0,
-        #         0.0,
-        #         0.0,
-        #         0.0,
-        #         0.0,
-        #         0.0,
-        #         0.0,
-        #         0.0,
-        #         0.0,
-        #         0.0,
-        #         0.0,
-        #         0.0,
-        #         0.0
-
-        #     )
-        # else:
-        #     return ""
-
-    def summary_header(self, mut writer: Some[Writer]):
-        comptime for col in SummaryColumns:
-            writer.write(col.name)
-        # writer.write(
-        #     Self.SummaryString.format(
-        #         " # ",
-        #         "backend.content",
-        #         " " * 28,
-        #         "test-size",
-        #         " " * 8,
-        #         "ticks-per-ms",
-        #         " " * 8,
-        #         "time(ticks)",
-        #         " " * 5,
-        #         "min(ticks)",
-        #         " " * 5,
-        #         "min(ms)",
-        #         "median(ms)",
-        #         "stddev.",
-        #         "iterations",
-        #         "overhead"
-        #     )
-        # )
 
     def register_target(mut self, name: StaticString):
         self.target = Target(
@@ -310,20 +383,70 @@ struct Perf(Movable, Writable):
         )
 
 
+comptime PerfFunc = def(
+    mut context: UnsafePointer[PixForgeContext, MutExternalOrigin],
+    width: Int,
+    height: Int,
+    loops: Int,
+) raises -> PerfTime
+
+
+def perf_calibrate(mut perf: Perf, perf_func: PerfFunc) raises -> Int:
+    var loops: Int
+    var min_loops: Int = 1
+    var calibration = perf_func(perf.context, perf.size, perf.size, min_loops)
+
+    if not perf.fast_and_sloppy:
+        var calibration_max: PerfTime
+        # Divde into quartiles.
+        # TODO: not sure what the 0.0001 is needed for?
+        calibration_max = PerfTime(perf.ms_per_batch * 0.0001 / 4)
+        while calibration < calibration_max:
+            min_loops *= 2
+            calibration = perf_func(
+                perf.context, perf.size, perf.size, min_loops
+            )
+
+    # NOTE: Comment taken from:
+    # https://gitlab.freedesktop.org/cairo/cairo.git 8e3ac5e4
+    # Compute the number of loops required for the timing
+    # interval to be perf->ms_per_iteration milliseconds. This
+    # helps to eliminate sampling variance due to timing and
+    # other systematic errors.  However, it also hides
+    # synchronisation overhead as we attempt to process a large
+    # batch of identical operations in a single shot. This can be
+    # considered both good and bad... It would be good to perform
+    # a more rigorous analysis of the synchronisation overhead,
+    # that is to estimate the time for loop=0.
+
+    # NOTE: Cairo has a strange int64 vs int casting.
+    loops = Int(
+        perf.ms_per_batch * 0.001 * Float64(min_loops) / Float64(calibration)
+    )
+    min_loops = 1 if perf.fast_and_sloppy else 10
+    if loops < min_loops:
+        loops = min_loops
+
+    return loops
+
+
 def perf_run(
     mut perf: Perf,
     name: StaticString,
-    perf_func: def(
-        mut context: UnsafePointer[PixForgeContext, MutExternalOrigin],
-        width: Int,
-        height: Int,
-        loops: Int,
-    ) raises -> PerfTime,
+    perf_func: PerfFunc,
 ) raises:
     perf.register_target(name)
 
-    var time = perf_func(perf.context, perf.size, perf.size, perf.iterations)
-    # logger.debug("Warming up: ", name)
-    perf.times.append(time)
+    logger.debug("Warming up: ", name)
+    var time = perf_func(perf.context, perf.size, perf.size, perf.batches)
+    logger.debug("Calibrating: ", name)
+    perf.loops = perf_calibrate(perf, perf_func)
 
-    logger.info(SummaryRow(perf))
+    logger.debug("Executing: ", name)
+    for b in range(perf.batches):
+        time = perf_func(perf.context, perf.size, perf.size, perf.loops)
+        perf.times.append(time)
+
+    var stats = SummaryStats(perf.times.copy())
+
+    logger.info(SummaryRow(perf, stats))
