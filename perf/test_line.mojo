@@ -2,11 +2,15 @@ from std.testing import TestSuite
 
 from std.time import sleep, perf_counter_ns
 
-from momanim.pix_forge.perf.perf import Perf, perf_run, PerfTime, Timer
+from momanim.pix_forge.perf.perf import Perf, perf_run, PerfTime, Timer, SummaryRow, SummaryHeader
+from std.logger.logger import Logger, DEFAULT_LEVEL
 from momanim.pix_forge.context import PixForgeContext
 
 
 comptime ContextPtr = UnsafePointer[PixForgeContext, MutExternalOrigin]
+
+
+comptime logger = Logger()
 
 
 def horizontal(
@@ -19,6 +23,7 @@ def horizontal(
     var timer = Timer(start=True)
 
     for _ in range(loops):
+        sleep(0.1)
         # stroke_presserve
         pass
 
@@ -30,7 +35,7 @@ def horizontal(
 
 def horizontal_hair(mut context: ContextPtr, width: Int, height: Int, loops: Int) raises -> PerfTime:
     sleep(0.1)
-    return 1
+    return horizontal(context, width, height, loops)
 
  
 
@@ -42,4 +47,7 @@ def line(mut perf: Perf, width: Int, height: Int) raises:
 def main() raises:
     var context = PixForgeContext()
     var perf = Perf(context=context^)
-    line(perf, 16, 16)
+    logger.info(SummaryHeader(perf))
+    perf.size=16
+    line(perf, perf.size, perf.size)
+
