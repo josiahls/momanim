@@ -91,7 +91,7 @@ CPPFLAGS = "-I$CAIRO_PREFIX/include/cairo"
 MAV_INCLUDES = " -I . -I third_party/NuMojo"
 MAV_LINKERS = " -Xlinker -lavutil -Xlinker -lavcodec -Xlinker -lswresample -Xlinker -lswscale -Xlinker -lavformat -Xlinker -lm"
 MOJO_COMPILE_FLAGS = "$MAV_LINKERS $MAV_INCLUDES"
-MOJO_DEBUG_COMPILE_FLAGS = "$MOJO_COMPILE_FLAGS --debug-level=line-tables -DASSERT=all"
+MOJO_DEBUG_COMPILE_FLAGS = "$MOJO_COMPILE_FLAGS --debug-level=line-tables -DASSERT=all -DLOGGING_LEVEL=DEBUG"
 MOJO_ENABLE_STACK_TRACE_ON_ERROR="1"
 LOGGING_LEVEL="DEBUG"
 
