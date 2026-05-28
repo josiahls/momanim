@@ -162,16 +162,6 @@ struct SummaryStats:
     var std_dev: Float64
     var batches: Int
     var values: List[PerfTime]
-    # var sum: PerfTime
-    # var mean: PerfTime
-    # var q1: PerfTime
-    # var q3: PerfTime
-    # var iqr: PerfTime
-    # var outlier_min: PerfTime
-    # var outlier_max: PerfTime
-
-    # var min_valid: Int
-    # var num_valid: Int
 
     def __init__(out self, var values: List[PerfTime]):
         var num_values = len(values)
@@ -238,7 +228,7 @@ struct SummaryStats:
 
         self.values = List[PerfTime](capacity=num_valid)
         for i in range(num_valid):
-            self.values.append(values_ptr[i]^)
+            self.values.append(values_ptr[i])
 
         self.batches = num_valid
         self.min_ticks = self.values[0]
