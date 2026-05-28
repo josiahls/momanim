@@ -16,7 +16,7 @@ comptime logger = Logger()
 def horizontal(
     context: ContextPtr, width: Int, height: Int, loops: Int
 ) -> PerfTime:
-    var h = height / 2 + 0.5
+    var h = Float64(height) / 2.0 + 0.5
     # move_to( context, 0, h)
     # line_to( context, width ,h)
 

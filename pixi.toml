@@ -150,7 +150,7 @@ outputs = [
 
 [tasks.cairo_perf_micro]
 depends-on = ["build_cairo"]
-cmd = "AIRO_PERF_OUTPUT=1  bash tools/run_cairo_perf_micro.sh {{ filter }}"
+cmd = "CAIRO_PERF_OUTPUT=1  bash tools/run_cairo_perf_micro.sh {{ filter }}"
 args = [{ arg = "filter", default = "" }]
 
 [tasks.test_pixman_cairo_draw_vector_basic]
