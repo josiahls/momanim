@@ -1,13 +1,13 @@
 from momanim.stdlib_extensions import Enumable
 
 
-struct ImageBufferType(Enumable):
+struct BufferType(Enumable):
     comptime dtype = Int
 
     var _value: Self.dtype
 
     comptime PACKED_BYTE = Self(0)
-    """Traditional image represented as a single contiguous byte buffer.
+    """A surface represented as a single contiguous byte buffer.
 
     Formats such as RGBA are stored in this type.
     """
@@ -43,8 +43,8 @@ comptime RGBA = SIMD[DType.uint8, 4]
 comptime RGB = SIMD[DType.uint8, 3]
 
 
-trait Imageable(Movable, Writable):
-    """An Image like object."""
+trait Surfaceable(Movable, Writable):
+    """An Surface like object."""
 
     pass
     # comptime buffer_type: ImageBufferType
@@ -53,7 +53,7 @@ trait Imageable(Movable, Writable):
     # dtypes are very wide ranging.
 
 
-def _fill_image_buffer[
+def _fill_buffer[
     dtype: DType, width: Int, //, batch_size: Int
 ](
     mut buffer: UnsafePointer[SIMD[dtype, width], MutExternalOrigin],
@@ -77,8 +77,8 @@ def _fill_image_buffer[
 
 
 # TODO: Parameterize later.
-struct ColorImage(Imageable):
-    comptime buffer_type = ImageBufferType.PACKED_BYTE
+struct ColorSurface(Surfaceable):
+    comptime buffer_type = BufferType.PACKED_BYTE
 
     # TODO: Parameterize later. Also I think newer mojo versions fix the infrerence.
     comptime format = RGBA
@@ -115,17 +115,17 @@ struct ColorImage(Imageable):
         self.line_size = std.math.align_up(self.width, line_alignment)
         self.size = self.line_size * height
         self.buffer = alloc[Self.format](self.size)
-        _fill_image_buffer[batch_size=batch_size](
+        _fill_buffer[batch_size=batch_size](
             self.buffer,
             fill,
             self.size,
-            "error during `ColorImage` initialization",
+            "error during `ColorSurface` initialization",
         )
 
 
 # TODO: Parameterize later.
-struct MaskImage(Imageable):
-    comptime buffer_type = ImageBufferType.PACKED_BYTE
+struct MaskSurface(Surfaceable):
+    comptime buffer_type = BufferType.PACKED_BYTE
 
     # TODO: Parameterize later. Also I think newer mojo versions fix the infrerence.
     comptime format = A8
@@ -151,17 +151,17 @@ struct MaskImage(Imageable):
         self.line_size = std.math.align_up(self.width, line_alignment)
         self.size = self.line_size * height
         self.buffer = alloc[Self.format](self.size)
-        _fill_image_buffer[batch_size=batch_size](
+        _fill_buffer[batch_size=batch_size](
             self.buffer,
             fill,
             self.size,
-            "error during `MaskImage` initialization",
+            "error during `MaskSurface` initialization",
         )
 
 
 # TODO: Parameterize later.
-struct SolidImage(Imageable):
-    comptime buffer_type = ImageBufferType.SOLID
+struct SolidSurface(Surfaceable):
+    comptime buffer_type = BufferType.SOLID
 
     # TODO: Parameterize later. Also I think newer mojo versions fix the infrerence.
     comptime format = RGBA

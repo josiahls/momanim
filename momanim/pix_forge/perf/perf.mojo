@@ -9,6 +9,7 @@ Reference implementation is taken from Cairo's perf tooling:
 """
 
 from std.io.file import FileHandle
+from std.pathlib import Path, cwd
 from std.time import sleep, perf_counter_ns
 from std.logger.logger import Logger, DEFAULT_LEVEL
 from std.algorithm.reduction import mean
@@ -328,14 +329,26 @@ struct Perf(Movable, Writable):
     var test_number: Int
     var size: Int
     var loops: Int
+    var output_path: Path
     # NOTE: Tried using Pointer, but passing the context from Perf into
     # subfunctions / perf functions was not possible do to the
     # origins.
     var context: UnsafePointer[PixForgeContext, MutExternalOrigin]
 
     def __init__(
-        out self, var context: PixForgeContext, fast_and_sloppy: Bool = False
+        out self,
+        var context: PixForgeContext,
+        fast_and_sloppy: Bool = False,
+        output_path: Optional[Path] = None,
     ):
+        if not output_path:
+            try:
+                self.output_path = cwd() / "build" / "pix_forge_perf"
+            except e:
+                logger.error("Failed to get current working directory: ", e)
+                self.output_path = Path(".")
+        else:
+            self.output_path = output_path.unsafe_value()
         self.summary = None
         self.summary_continuous = False
 
@@ -426,6 +439,11 @@ def perf_run(
     perf_func: PerfFunc,
 ) raises:
     perf.register_target(name)
+
+    _ = perf_func(perf.context, perf.size, perf.size, 1)
+    surface_write_to_png(
+        perf.context, perf.output_path, t"{perf.target.name}.out.png"
+    )
 
     logger.debug("Warming up: ", name)
     var time = perf_func(perf.context, perf.size, perf.size, perf.batches)
