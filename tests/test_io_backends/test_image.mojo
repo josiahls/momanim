@@ -1,4 +1,4 @@
-from momanim.data_structs.image import Image
+from momanim.io_backends.image import Image
 from std.testing import TestSuite, assert_equal, assert_raises
 from momanim.constants import ColorSpace
 

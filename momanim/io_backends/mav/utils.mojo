@@ -8,6 +8,8 @@ from mav.ffmpeg.avutil.frame import AVFrame
 from mav.ffmpeg.avcodec.avcodec import AVCodecContext
 from mav.ffmpeg.swscale.swscale import SwsFlags
 
+from mav._clib import CPointer, MutCPointer, ImmutCPointer
+
 
 # BITEXACT + ACCURATE_RND: YUV→RGB rounding can otherwise differ by ±1 between
 # SIMD implementations (e.g. AArch64 NEON vs x86), breaking pixel-exact tests.
@@ -22,7 +24,7 @@ def convert_format(
     mut src_frame: UnsafePointer[AVFrame, origin=MutExternalOrigin],
     mut dst_frame: UnsafePointer[AVFrame, origin=MutExternalOrigin],
     mut sws_ctx: UnsafePointer[
-        UnsafePointer[SwsContext, origin=MutExternalOrigin],
+        Optional[UnsafePointer[SwsContext, origin=MutExternalOrigin]],
         origin=MutExternalOrigin,
     ],
     mut enc: UnsafePointer[AVCodecContext, origin=MutExternalOrigin],
@@ -45,28 +47,32 @@ def convert_format(
             dst_h,
             dst_format,
             SCALE_FLAGS.value,
-            UnsafePointer[SwsFilter, MutExternalOrigin](),
-            UnsafePointer[SwsFilter, MutExternalOrigin](),
-            UnsafePointer[c_double, ImmutExternalOrigin](),
+            MutCPointer[SwsFilter](),
+            MutCPointer[SwsFilter](),
+            ImmutCPointer[c_double](),
         )
         if not sws_ctx[]:
             raise Error("Failed to initialize conversion context")
         # RGB8 (e.g. GIF): libswscale may dither when packing to 3:3:2; match CLI `-sws_dither none`.
         if dst_format == AVPixelFormat.AV_PIX_FMT_RGB8._value:
-            sws_ctx[][].dither = SwsDither.SWS_DITHER_NONE.value
+            sws_ctx[][][].dither = SwsDither.SWS_DITHER_NONE.value
 
     # TODO: Get the number of planes, should be able to do `len(src_frame[].data)`
-    var src_slice = alloc[UnsafePointer[c_uchar, ImmutExternalOrigin]](8)
+    var src_slice = alloc[
+        Optional[UnsafePointer[c_uchar, ImmutExternalOrigin]]
+    ](8)
     for i in range(8):
-        src_slice[i] = src_frame[].data[i].as_immutable()
-    var dst_slice = alloc[UnsafePointer[c_uchar, MutExternalOrigin]](8)
+        src_slice[i] = src_frame[].data[i].value().as_immutable()
+    var dst_slice = alloc[Optional[UnsafePointer[c_uchar, MutExternalOrigin]]](
+        8
+    )
     for i in range(8):
         dst_slice[i] = dst_frame[].data[i]
 
     # NOTE: https://github.com/modular/modular/pull/5715
     # adds unsafe_ptr to StaticTuple, which is needed for this.
     var res = swscale.sws_scale(
-        sws_ctx[],
+        sws_ctx[].value(),
         src_slice,
         src_frame[].linesize.unsafe_ptr(),
         0,

@@ -1,5 +1,5 @@
-from momanim.data_structs.video import Video
-from momanim.data_structs.image import Image
+from momanim.io_backends.video import Video
+from momanim.io_backends.image import Image
 from momanim.scene.scene import Scenable
 from momanim.camera.camera import Camera
 from std.pathlib import Path

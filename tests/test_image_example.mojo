@@ -6,7 +6,7 @@ from std.pathlib import Path
 from std.os.path import join
 from momanim.scene.scene import Scenable
 from momanim.mobject.polygram import Square, Circle
-from momanim.data_structs.video import Video
+from momanim.io_backends.video import Video
 from momanim.io_backends.mav.video_write import video_write
 from momanim.scene.scene import Scenable
 from momanim.typing import Vector3D
@@ -14,7 +14,6 @@ from std.utils.variant import Variant
 from momanim.renderer.basic_renderer import BasicRenderer, Create
 from momanim.animation.transform import Transform
 from momanim.camera.camera import Camera
-import numojo as nm
 from momanim.animation.animation import Animatable
 # from momanim.animation.animation import Animatable
 # from momanim.animation.creation import Create

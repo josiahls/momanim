@@ -67,12 +67,13 @@ from std.utils import StaticTuple
 from momanim.io_backends.mav.utils import convert_format
 from std.logger.logger import Logger, Level, DEFAULT_LEVEL
 
-from momanim.data_structs.video import Video
+from momanim.io_backends.video import Video
 
 comptime STREAM_FRAME_RATE = 25
 comptime STREAM_DURATION = 10.0
 
 from momanim.constants import ColorSpace
+from mav._clib import CPointer, MutCPointer, ImmutCPointer
 
 
 comptime _logger = Logger[level=Level.DEBUG]()
@@ -89,7 +90,7 @@ def alloc_frame(
     width: c_int,
     height: c_int,
 ) raises -> UnsafePointer[AVFrame, MutExternalOrigin]:
-    var frame = avutil.av_frame_alloc()
+    var frame = avutil.av_frame_alloc().value()
 
     frame[].format = pix_fmt
     frame[].width = width
@@ -110,7 +111,7 @@ struct VideoData(Copyable, Movable):
     var n_color_spaces: c_int
     var n_frames: c_int
 
-    fn __init__(out self):
+    def __init__(out self):
         self.width = 0
         self.height = 0
         self.linesizes = List[c_int]()
@@ -126,11 +127,11 @@ def decode_packet(
     packet: UnsafePointer[AVPacket, MutExternalOrigin],
     mut frame: UnsafePointer[AVFrame, MutExternalOrigin],
     mut video: Video[c_uchar.dtype],
-    mut sws_ctx: UnsafePointer[
-        UnsafePointer[SwsContext, MutExternalOrigin], MutExternalOrigin
-    ],
+    mut sws_ctx: UnsafePointer[MutCPointer[SwsContext], MutExternalOrigin],
 ) raises -> c_int:
-    var ret = avcodec.avcodec_send_packet(video_codec_ctx, packet)
+    var ret = avcodec.avcodec_send_packet(
+        video_codec_ctx, packet.as_immutable()
+    )
     if ret < 0:
         raise Error("Failed to send packet: {}".format(avutil.av_err2str(ret)))
 
@@ -191,9 +192,9 @@ def video_read[
         raise Error("File does not exist: {}".format(path))
 
     _logger.info("Reading video from path: ", path)
-    var packet = avcodec.av_packet_alloc()
-    var oc = alloc[UnsafePointer[AVFormatContext, MutExternalOrigin]](1)
-    oc[] = UnsafePointer[AVFormatContext, MutExternalOrigin]()
+    var packet = avcodec.av_packet_alloc().value()
+    var oc = alloc[MutCPointer[AVFormatContext]](1)
+    oc[] = MutCPointer[AVFormatContext]()
     var path_copy = String(path).copy()
     var ret = c_int(0)
     _check(
@@ -221,7 +222,7 @@ def video_read[
         var video_stream = oc[][].streams[i]
         var video_codec_id = video_stream[].codecpar[].codec_id
         var video_codec = avcodec.avcodec_find_decoder(video_codec_id)
-        var video_codec_ctx = avcodec.avcodec_alloc_context3(video_codec)
+        var video_codec_ctx = avcodec.avcodec_alloc_context3(video_codec).take()
         var sws_ctx = alloc[UnsafePointer[SwsContext, MutExternalOrigin]](1)
         sws_ctx[] = UnsafePointer[SwsContext, MutExternalOrigin]()
         var video = Video[c_uchar.dtype]()

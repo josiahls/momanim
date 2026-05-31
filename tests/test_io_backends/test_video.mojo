@@ -1,4 +1,4 @@
-from momanim.data_structs.video import Video
+from momanim.io_backends.video import Video
 from std.testing import TestSuite, assert_equal, assert_raises
 from momanim.constants import ColorSpace
 
