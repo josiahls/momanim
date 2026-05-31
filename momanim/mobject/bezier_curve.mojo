@@ -60,8 +60,8 @@ struct Point[dtype: DType = DType.float32](
     def __mul__(self, other: Self) -> Self:
         return Self(self.load() * other.load())
 
-    def __mul__(self, other: Scalar[Self.dtype]) -> Self:
-        return Self(self.load() * other)
+    # def __mul__(self, other: Scalar[Self.dtype]) -> Self:
+    #     return Self(self.load() * other)
 
     def __mul__(self, other: SIMD[Self.dtype, Self.dim]) -> Self:
         return Self(self.load() * other)
