@@ -20,9 +20,12 @@ from mav.ffmpeg.avutil.rational import AVRational
 from std.logger.logger import Logger, Level, DEFAULT_LEVEL
 from mav.ffmpeg.avutil.pixfmt import AVColorRange, AVColorSpace
 from mav.ffmpeg.swscale.swscale import SwsContext
+from mav._clib import CPointer, MutCPointer, ImmutCPointer
+
 from momanim.io_backends.mav.utils import convert_format
 
 from momanim.io_backends.image import Image
+
 from momanim.constants import ColorSpace
 
 comptime _logger = Logger[level=DEFAULT_LEVEL]()
@@ -40,7 +43,7 @@ def alloc_frame(
     height: c_int,
     colorspace: c_int,
 ) raises -> UnsafePointer[AVFrame, MutExternalOrigin]:
-    var frame = avutil.av_frame_alloc()
+    var frame = avutil.av_frame_alloc().value()
 
     frame[].format = pix_fmt
     frame[].width = width
@@ -68,7 +71,7 @@ def alloc_frame(
 
 def encode(
     enc_ctx: UnsafePointer[AVCodecContext, origin=MutExternalOrigin],
-    frame: UnsafePointer[AVFrame, origin=MutExternalOrigin],
+    frame: Optional[UnsafePointer[AVFrame, origin=ImmutExternalOrigin]],
     pkt: UnsafePointer[AVPacket, origin=MutExternalOrigin],
     mut outfile: FileHandle,
 ) raises:
@@ -83,7 +86,7 @@ def encode(
 
         outfile.write_bytes(
             Span(
-                ptr=pkt[].data,
+                ptr=pkt[].data.value(),
                 length=Int(pkt[].size),
             )
         )
@@ -110,19 +113,19 @@ def image_write(image: Image[c_uchar.dtype], path: Path) raises:
     """
     _logger.info("Saving image to path: ", path)
 
-    var dict = UnsafePointer[AVDictionary, MutExternalOrigin]()
-    var dict_ptr = alloc[UnsafePointer[AVDictionary, MutExternalOrigin]](1)
+    var dict = MutCPointer[AVDictionary]()
+    var dict_ptr = alloc[MutCPointer[AVDictionary]](1)
     dict_ptr[] = dict
     var suffix = path.suffix()
     var codec_name = suffix
     if suffix == ".jpeg" or suffix == ".jpg":
         codec_name = "mjpeg"
 
-    var sws_ctx_ptr = UnsafePointer[SwsContext, MutExternalOrigin]()
+    var sws_ctx_ptr = MutCPointer[SwsContext]()
     var sws_ctx = alloc[type_of(sws_ctx_ptr)](1)
     sws_ctx[] = sws_ctx_ptr
     var codec = avcodec.avcodec_find_encoder_by_name(codec_name)
-    var context = avcodec.avcodec_alloc_context3(codec)
+    var context = avcodec.avcodec_alloc_context3(codec).value()
     context[].time_base = AVRational(num=1, den=25)
     var from_fmt: AVPixelFormat.ENUM_DTYPE
     if image.color_space == ColorSpace.RGB_24:
@@ -144,7 +147,7 @@ def image_write(image: Image[c_uchar.dtype], path: Path) raises:
     else:
         print("No color range found, using default")
         context[].color_range = AVColorRange.AVCOL_RANGE_JPEG._value
-    var packet = avcodec.av_packet_alloc()
+    var packet = avcodec.av_packet_alloc().value()
 
     context[].pix_fmt = get_pix_fmt_from_extension(suffix)
 
@@ -156,7 +159,7 @@ def image_write(image: Image[c_uchar.dtype], path: Path) raises:
 
     # Source: packed pixels from `image` (e.g. RGBA). Do not call av_frame_get_buffer;
     # FFmpeg must not own this memory — it lives on `Image`.
-    var src_frame = avutil.av_frame_alloc()
+    var src_frame = avutil.av_frame_alloc().value()
     src_frame[].format = from_fmt
     src_frame[].width = c_int(image.w)
     src_frame[].height = c_int(image.h)
@@ -184,33 +187,34 @@ def image_write(image: Image[c_uchar.dtype], path: Path) raises:
     with open(path, "w") as f:
         encode(
             context,
-            dst_frame,
+            dst_frame.as_immutable(),
             packet,
             f,
         )
 
         encode(
             context,
-            UnsafePointer[AVFrame, origin=MutExternalOrigin](),
+            ImmutCPointer[AVFrame](),
             packet,
             f,
         )
 
-        swscale.sws_freeContext(sws_ctx[])
+        if sws_ctx[]:
+            swscale.sws_freeContext(sws_ctx[][])
 
-        var src_ptr = alloc[UnsafePointer[AVFrame, MutExternalOrigin]](1)
+        var src_ptr = alloc[MutCPointer[AVFrame]](1)
         src_ptr[] = src_frame
         avutil.av_frame_free(src_ptr)
         src_ptr.free()
-        var frame_ptr = alloc[UnsafePointer[AVFrame, MutExternalOrigin]](1)
+        var frame_ptr = alloc[MutCPointer[AVFrame]](1)
         frame_ptr[] = dst_frame
         avutil.av_frame_free(frame_ptr)
         frame_ptr.free()
-        var pkt_ptr = alloc[UnsafePointer[AVPacket, MutExternalOrigin]](1)
+        var pkt_ptr = alloc[MutCPointer[AVPacket]](1)
         pkt_ptr[] = packet
         avcodec.av_packet_free(pkt_ptr)
         pkt_ptr.free()
-        var ctx_ptr = alloc[UnsafePointer[AVCodecContext, MutExternalOrigin]](1)
+        var ctx_ptr = alloc[MutCPointer[AVCodecContext]](1)
         ctx_ptr[] = context
         avcodec.avcodec_free_context(ctx_ptr)
         ctx_ptr.free()

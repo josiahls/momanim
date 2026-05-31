@@ -97,7 +97,7 @@ struct Video[dtype: DType = DType.uint8](Copyable, Movable, Sized, Writable):
     def steal_frame(
         mut self,
         var frame_ptr: UnsafePointer[
-            UnsafePointer[Scalar[Self.dtype], MutExternalOrigin],
+            Optional[UnsafePointer[Scalar[Self.dtype], MutExternalOrigin]],
             MutExternalOrigin,
         ],
         linesize: Int,
@@ -105,7 +105,9 @@ struct Video[dtype: DType = DType.uint8](Copyable, Movable, Sized, Writable):
     ) raises:
         self.linesize = linesize
         var buf_size = linesize * Int(self.h)
-        var frame = VideoFrame[Self.dtype](frame_ptr[0], buf_size, copy=copy)
+        var frame = VideoFrame[Self.dtype](
+            frame_ptr[0].value(), buf_size, copy=copy
+        )
         self._frames.append(frame^)
 
     def frame(
@@ -116,18 +118,7 @@ struct Video[dtype: DType = DType.uint8](Copyable, Movable, Sized, Writable):
     def unsafe_ptr(
         mut self, frame_idx: Int
     ) -> UnsafePointer[Scalar[Self.dtype], MutExternalOrigin]:
-        return self._frames[frame_idx]._data.ptr
-
-    def numojo(mut self, frame_idx: Int) raises -> nm.NDArray[Self.dtype]:
-        var row_stride = self.linesize
-        var array = nm.NDArray[Self.dtype](
-            shape=nm.NDArrayShape(Int(self.h), Int(self.w), Int(self.ch)),
-            is_view=True,
-            data=self._frames[frame_idx]._data.copy(),
-            strides=nm.NDArrayStrides(row_stride, Int(self.ch), 1),
-            offset=0,
-        )
-        return array^
+        return self._frames[frame_idx]._data
 
     def __len__(self) -> Int:
         return len(self._frames)

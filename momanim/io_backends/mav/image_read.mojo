@@ -19,10 +19,11 @@ from mav.ffmpeg.avutil.pixfmt import AVPixelFormat
 from mav.ffmpeg.avutil.rational import AVRational
 from mav.ffmpeg.avutil.pixfmt import AVColorRange
 from std.logger.logger import Logger, Level, DEFAULT_LEVEL
+from mav._clib import CPointer, MutCPointer, ImmutCPointer
 
 from std.testing import assert_equal
 
-from momanim.data_structs.image import Image
+from momanim.io_backends.image import Image
 from momanim.constants import ColorSpace
 
 comptime _logger = Logger[level=DEFAULT_LEVEL]()
@@ -70,7 +71,7 @@ def decode(
     mut image_info: ImageInfo,
     mut output_buffer: List[c_uchar],
 ) raises:
-    var ret: c_int = avcodec.avcodec_send_packet(dec_ctx, pkt)
+    var ret: c_int = avcodec.avcodec_send_packet(dec_ctx, pkt.as_immutable())
     _logger.debug("Packet sent successfully.")
 
     while ret >= 0:
@@ -90,7 +91,7 @@ def decode(
         # what is happening here. (dont be fooled by the ptr pass)
         output_buffer.extend(
             Span(
-                ptr=frame[].data[0],
+                ptr=frame[].data[0].value(),
                 length=Int(frame[].linesize[0] * frame[].height),
             )
         )
@@ -107,8 +108,8 @@ def image_read[
     """
     _logger.info("Reading image from path: ", path)
 
-    var dict = UnsafePointer[AVDictionary, MutExternalOrigin]()
-    var dict_ptr = alloc[UnsafePointer[AVDictionary, MutExternalOrigin]](1)
+    var dict = MutCPointer[AVDictionary]()
+    var dict_ptr = alloc[MutCPointer[AVDictionary]](1)
     dict_ptr[] = dict
     var extension = path.suffix()
 
@@ -124,15 +125,15 @@ def image_read[
         Int(AV_INPUT_BUFFER_PADDING_SIZE),
     )
 
-    var packet = avcodec.av_packet_alloc()
+    var packet = avcodec.av_packet_alloc().value()
     var codec = avcodec.avcodec_find_decoder_by_name(extension)
-    var parser = avcodec.av_parser_init(codec[].id)
-    var context = avcodec.avcodec_alloc_context3(codec)
+    var parser = avcodec.av_parser_init(codec.value()[].id).value()
+    var context = avcodec.avcodec_alloc_context3(codec).value()
     # TODO: change the load format on extension.
     context[].pix_fmt = AVPixelFormat.AV_PIX_FMT_RGB24._value
     var ret = avcodec.avcodec_open2(context, codec, dict_ptr)
     assert_equal(ret, 0)
-    var frame = avutil.av_frame_alloc()
+    var frame = avutil.av_frame_alloc().value()
     var image_info = ImageInfo()
 
     with open(path, "r") as f:
@@ -177,16 +178,16 @@ def image_read[
     _logger.debug("Image info: ", image_info)
     _logger.debug("Output buffer: ", len(output_buffer))
 
-    var frame_ptr = alloc[UnsafePointer[AVFrame, MutExternalOrigin]](1)
+    var frame_ptr = alloc[MutCPointer[AVFrame]](1)
     frame_ptr[] = frame
     avutil.av_frame_free(frame_ptr)
     frame_ptr.free()
-    var pkt_ptr = alloc[UnsafePointer[AVPacket, MutExternalOrigin]](1)
+    var pkt_ptr = alloc[MutCPointer[AVPacket]](1)
     pkt_ptr[] = packet
     avcodec.av_packet_free(pkt_ptr)
     pkt_ptr.free()
     avcodec.av_parser_close(parser)
-    var ctx_ptr = alloc[UnsafePointer[AVCodecContext, MutExternalOrigin]](1)
+    var ctx_ptr = alloc[MutCPointer[AVCodecContext]](1)
     ctx_ptr[] = context
     avcodec.avcodec_free_context(ctx_ptr)
     ctx_ptr.free()

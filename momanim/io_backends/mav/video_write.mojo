@@ -67,6 +67,7 @@ from std.utils import StaticTuple
 from std.logger.logger import Logger, Level, DEFAULT_LEVEL
 from momanim.constants import ColorSpace
 from momanim.io_backends.mav.utils import convert_format
+from mav._clib import CPointer, MutCPointer, ImmutCPointer
 
 
 comptime STREAM_FRAME_RATE = 25
@@ -76,7 +77,7 @@ comptime STREAM_PIX_FMT = AVPixelFormat.AV_PIX_FMT_YUV420P._value
 comptime SCALE_FLAGS = SwsFlags.SWS_BICUBIC
 
 
-from momanim.data_structs.video import Video
+from momanim.io_backends.video import Video
 
 comptime _logger = Logger[level=Level.DEBUG]()
 
@@ -87,7 +88,7 @@ def alloc_frame(
     height: c_int,
     colorspace: c_int,
 ) raises -> UnsafePointer[AVFrame, MutExternalOrigin]:
-    var frame = avutil.av_frame_alloc()
+    var frame = avutil.av_frame_alloc().value()
 
     frame[].format = pix_fmt
     frame[].width = width
@@ -140,59 +141,55 @@ def open_video(
 
 
 struct OutputStream(Copyable, Movable):
-    var st: UnsafePointer[AVStream, origin=MutExternalOrigin]
-    var codec: UnsafePointer[AVCodec, origin=ImmutExternalOrigin]
-    var enc: UnsafePointer[AVCodecContext, origin=MutExternalOrigin]
+    var st: MutCPointer[AVStream]
+    var codec: ImmutCPointer[AVCodec]
+    var enc: MutCPointer[AVCodecContext]
     var next_pts: c_long_long
     var samples_count: c_int
-    var frame: UnsafePointer[AVFrame, origin=MutExternalOrigin]
-    var conversion_frame: UnsafePointer[AVFrame, origin=MutExternalOrigin]
+    var frame: MutCPointer[AVFrame]
+    var conversion_frame: MutCPointer[AVFrame]
     "Used for storing mid-conversion frames."
-    var pkt: UnsafePointer[AVPacket, origin=MutExternalOrigin]
-    var sws_ctx: UnsafePointer[
-        UnsafePointer[SwsContext, origin=MutExternalOrigin],
-        origin=MutExternalOrigin,
-    ]
-    var swr_ctx: UnsafePointer[SwrContext, origin=MutExternalOrigin]
+    var pkt: MutCPointer[AVPacket]
+    var sws_ctx: UnsafePointer[MutCPointer[SwsContext], MutExternalOrigin]
+    var swr_ctx: MutCPointer[SwrContext]
 
     def __init__(out self) raises:
-        self.st = UnsafePointer[AVStream, MutExternalOrigin]()
-        self.codec = UnsafePointer[AVCodec, MutExternalOrigin]()
-        self.enc = UnsafePointer[AVCodecContext, MutExternalOrigin]()
+        self.st = MutCPointer[AVStream]()
+        self.codec = ImmutCPointer[AVCodec]()
+        self.enc = MutCPointer[AVCodecContext]()
         self.next_pts = c_long_long(0)
         self.samples_count = c_int(0)
-        self.frame = UnsafePointer[AVFrame, MutExternalOrigin]()
-        self.conversion_frame = UnsafePointer[AVFrame, MutExternalOrigin]()
-        self.pkt = UnsafePointer[AVPacket, MutExternalOrigin]()
-        var sws_ctx_ptr = UnsafePointer[SwsContext, MutExternalOrigin]()
-        self.sws_ctx = alloc[type_of(sws_ctx_ptr)](1)
-        self.sws_ctx[] = sws_ctx_ptr
-        self.swr_ctx = UnsafePointer[SwrContext, MutExternalOrigin]()
+        self.frame = MutCPointer[AVFrame]()
+        self.conversion_frame = MutCPointer[AVFrame]()
+        self.pkt = MutCPointer[AVPacket]()
+        self.sws_ctx = alloc[MutCPointer[SwsContext]](1)
+        self.sws_ctx[] = MutCPointer[SwsContext]()
+        self.swr_ctx = MutCPointer[SwrContext]()
 
     def __del__(deinit self):
         if self.frame:
-            var ptr = alloc[UnsafePointer[AVFrame, MutExternalOrigin]](1)
+            var ptr = alloc[MutCPointer[AVFrame]](1)
             ptr[] = self.frame
             avutil.av_frame_free(ptr)
             ptr.free()
         if self.conversion_frame:
-            var ptr = alloc[UnsafePointer[AVFrame, MutExternalOrigin]](1)
+            var ptr = alloc[MutCPointer[AVFrame]](1)
             ptr[] = self.conversion_frame
             avutil.av_frame_free(ptr)
             ptr.free()
         if self.pkt:
-            var ptr = alloc[UnsafePointer[AVPacket, MutExternalOrigin]](1)
+            var ptr = alloc[MutCPointer[AVPacket]](1)
             ptr[] = self.pkt
             avcodec.av_packet_free(ptr)
             ptr.free()
         if self.enc:
-            var ptr = alloc[UnsafePointer[AVCodecContext, MutExternalOrigin]](1)
+            var ptr = alloc[MutCPointer[AVCodecContext]](1)
             ptr[] = self.enc
             avcodec.avcodec_free_context(ptr)
             ptr.free()
         if self.sws_ctx:
             if self.sws_ctx[]:
-                swscale.sws_freeContext(self.sws_ctx[])
+                swscale.sws_freeContext(self.sws_ctx[].value())
             self.sws_ctx.free()
 
 
@@ -203,25 +200,25 @@ def add_stream(
 ) raises -> OutputStream:
     var ost = OutputStream()
 
-    ost.codec = avcodec.avcodec_find_encoder(oc[].oformat[].video_codec)
+    ost.codec = avcodec.avcodec_find_encoder(oc[].oformat[].video_codec).value()
     if not ost.codec:
         raise Error("Failed to find encoder")
 
-    ost.pkt = avcodec.av_packet_alloc()
+    ost.pkt = avcodec.av_packet_alloc().value()
     if not ost.pkt:
         raise Error("Failed to allocate AVPacket")
 
     ost.st = avformat.avformat_new_stream(
         oc,
         # Add a null pointer.
-        UnsafePointer[AVCodec, ImmutExternalOrigin](),
-    )
+        Optional[UnsafePointer[AVCodec, ImmutExternalOrigin]](),
+    ).value()
     if not ost.st:
         raise Error("Failed to allocate stream")
 
     ost.st[].id = c_int(oc[].nb_streams - 1)
 
-    ost.enc = avcodec.avcodec_alloc_context3(ost.codec)
+    ost.enc = avcodec.avcodec_alloc_context3(ost.codec).value()
     if not ost.enc:
         raise Error("Failed to allocate encoding context")
 
@@ -232,15 +229,15 @@ def add_stream(
         else:
             # FIXME: Note that sample_fmts is deprecated and we should be using
             # avcodec_get_supported_config
-            ost.enc[].sample_fmt = ost.codec[].sample_fmts[]
+            ost.enc[].sample_fmt = ost.codec[].sample_fmts.value()[]
         ost.enc[].bit_rate = 64000
         ost.enc[].sample_rate = 44100
         if ost.codec[].supported_samplerates:
-            ost.enc[].sample_rate = ost.codec[].supported_samplerates[]
+            ost.enc[].sample_rate = ost.codec[].supported_samplerates.value()[]
             for i in count():
-                if not ost.codec[].supported_samplerates[i]:
+                if not ost.codec[].supported_samplerates.value()[i]:
                     break
-                if ost.codec[].supported_samplerates[i] == 44100:
+                if ost.codec[].supported_samplerates.value()[i] == 44100:
                     ost.enc[].sample_rate = 44100
 
         var layout = alloc[AVChannelLayout](1)
@@ -419,39 +416,43 @@ def video_write(
     # var frame = avutil.av_frame_alloc()
     # alloc_output_context expects pointer-to-pointer: it allocates a new context
     # and stores it in *ctx. Passing a raw pointer causes use-after-free.
-    var oc = alloc[UnsafePointer[AVFormatContext, MutExternalOrigin]](1)
+    var optional_oc = alloc[
+        Optional[UnsafePointer[AVFormatContext, MutExternalOrigin]]
+    ](1)
     var path_s = String(path)
     var ret = avformat.avformat_alloc_output_context(
-        ctx=oc,
+        ctx=optional_oc,
         filename=path_s,
     )
     if ret < 0:
         raise Error("Failed to allocate output context: {}".format(ret))
-    if not oc[]:
+    if not optional_oc[]:
         raise Error("Failed to allocate output context")
+
+    var oc = optional_oc[].value()
     var opt = alloc[UnsafePointer[AVDictionary, MutExternalOrigin]](1)
     opt[] = UnsafePointer[AVDictionary, MutExternalOrigin]()
 
-    var fmt = UnsafePointer(to=oc[][].oformat)
+    var fmt = UnsafePointer(to=oc[].oformat)
     if not fmt:
         raise Error("Failed to find output format")
     if fmt[][].video_codec == AVCodecID.AV_CODEC_ID_NONE._value:
         raise Error("Failed to find video codec")
     # var video_codec = UnsafePointer(to=oc[][].video_codec)
 
-    if oc[][].oformat[].video_codec == AVCodecID.AV_CODEC_ID_NONE._value:
+    if oc[].oformat[].video_codec == AVCodecID.AV_CODEC_ID_NONE._value:
         raise Error("Failed to find video codec")
 
     var output_streams = List[OutputStream](capacity=Int(len(videos)))
     for ref video in videos:
-        output_streams.append(add_stream(oc[], video, fps))
+        output_streams.append(add_stream(oc, video, fps))
         open_video(oc[], output_streams[-1], opt[])
 
-    avformat.av_dump_format(oc[], 0, path_s, 1)
-    if not (oc[][].oformat[].flags & AVFMT_NOFILE):
+    avformat.av_dump_format(oc, 0, path_s, 1)
+    if not (oc[].oformat[].flags & AVFMT_NOFILE):
         _check(
             avformat.avio_open(
-                UnsafePointer(to=oc[][].pb),
+                UnsafePointer(to=oc[].pb),
                 path_s,
                 AVIO_FLAG_WRITE,
             ),
@@ -459,7 +460,7 @@ def video_write(
         )
 
     _check(
-        avformat.avformat_write_header(oc[], opt), "Failed to write header: {}"
+        avformat.avformat_write_header(oc, opt), "Failed to write header: {}"
     )
 
     var i = 0
@@ -468,11 +469,11 @@ def video_write(
         var do_encode_video = True
         while do_encode_video:
             do_encode_video = (
-                write_frame(oc[], stream, video, max_duration_seconds) == 0
+                write_frame(oc, stream, video, max_duration_seconds) == 0
             )
         i += 1
 
-    _check(avformat.av_write_trailer(oc[]), "Failed to write trailer: {}")
+    _check(avformat.av_write_trailer(oc), "Failed to write trailer: {}")
 
     if not (oc[][].oformat[].flags & AVFMT_NOFILE) and oc[][].pb:
         var pb_ptr = alloc[UnsafePointer[AVIOContext, MutExternalOrigin]](1)
@@ -481,6 +482,6 @@ def video_write(
         oc[][].pb = pb_ptr[]
         pb_ptr.free()
 
-    avformat.avformat_free_context(oc[])
-    oc.free()
+    avformat.avformat_free_context(oc)
+    # oc.free()
     opt.free()
