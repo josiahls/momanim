@@ -92,7 +92,7 @@ struct ColorSurface(Surfaceable):
     var width: Int
     var height: Int
     var channels: Int
-    var len_line_bytes: Int
+    var line_size_bytes: Int
     var len_bytes: Int
     var size: Int
 
@@ -124,9 +124,9 @@ struct ColorSurface(Surfaceable):
         # 24 bits, its possible the required alignment will be different as
         # opposed to aligning RGBA.
         self.size = self.width * height
-        self.len_line_bytes = self.width * size_of[self.format]()
+        self.line_size_bytes = self.width * size_of[self.format]()
 
-        self.len_bytes = self.len_line_bytes * height
+        self.len_bytes = self.line_size_bytes * height
         self.buffer = alloc[Self.format](self.size)
 
         _fill_buffer[batch_size=batch_size](
@@ -147,7 +147,7 @@ struct MaskSurface(Surfaceable):
     var buffer: UnsafePointer[Self.format, MutExternalOrigin]
     var width: Int
     var height: Int
-    var line_size: Int
+    var line_size_bytes: Int
     var size: Int
 
     # TODO: switch to batch_size: SIMDSize
@@ -162,8 +162,10 @@ struct MaskSurface(Surfaceable):
     ):
         self.width = width
         self.height = height
-        self.line_size = std.math.align_up(self.width, line_alignment)
-        self.size = self.line_size * height
+        # self.line_size = std.math.align_up(self.width, line_alignment)
+
+        self.line_size_bytes = self.width * size_of[self.format]()
+        self.size = self.line_size_bytes * height
         self.buffer = alloc[Self.format](self.size)
         _fill_buffer[batch_size=batch_size](
             self.buffer,

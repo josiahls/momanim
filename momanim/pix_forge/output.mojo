@@ -60,7 +60,7 @@ def surface_to_png(
         buffer[line_size_bytes * c_int(surface.height) - 4] = 0
     else:
         buffer = surface.buffer.bitcast[UInt8]()
-        line_size_bytes = c_int(surface.len_line_bytes)
+        line_size_bytes = c_int(surface.line_size_bytes)
 
     image_write(
         w=c_int(surface.width),
