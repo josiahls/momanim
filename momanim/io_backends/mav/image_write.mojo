@@ -104,13 +104,15 @@ def get_pix_fmt_from_extension(
         raise Error("Unsupported extension: ", extension)
 
 
-def image_write(image: Image[c_uchar.dtype], path: Path) raises:
-    """Saves an image to a file.
-
-    Args:
-        image: The image to save.
-        path: The path to save the image to.
-    """
+def image_write(
+    w: c_int,
+    h: c_int,
+    data: UnsafePointer[c_uchar, MutExternalOrigin],
+    line_size: c_int,
+    from_fmt: AVPixelFormat.ENUM_DTYPE,
+    color_range: c_int,
+    path: Path,
+) raises:
     _logger.info("Saving image to path: ", path)
 
     var dict = MutCPointer[AVDictionary]()
@@ -127,26 +129,9 @@ def image_write(image: Image[c_uchar.dtype], path: Path) raises:
     var codec = avcodec.avcodec_find_encoder_by_name(codec_name)
     var context = avcodec.avcodec_alloc_context3(codec).value()
     context[].time_base = AVRational(num=1, den=25)
-    var from_fmt: AVPixelFormat.ENUM_DTYPE
-    if image.color_space == ColorSpace.RGB_24:
-        from_fmt = AVPixelFormat.AV_PIX_FMT_RGB24._value
-    elif image.color_space == ColorSpace.RGBA_32:
-        from_fmt = AVPixelFormat.AV_PIX_FMT_RGBA._value
-    elif image.color_space == ColorSpace.YUV_420P:
-        from_fmt = AVPixelFormat.AV_PIX_FMT_YUV420P._value
-    elif image.color_space == ColorSpace.GREY_8:
-        from_fmt = AVPixelFormat.AV_PIX_FMT_GRAY8._value
-    else:
-        raise Error("Unsupported color space: ", image.color_space)
-    context[].width = c_int(image.w)
-    context[].height = c_int(image.h)
-    if "color_range" in image.io_backend_opaque_params:
-        context[].color_range = image.io_backend_opaque_params[
-            "color_range"
-        ].bitcast[c_int]()[]
-    else:
-        print("No color range found, using default")
-        context[].color_range = AVColorRange.AVCOL_RANGE_JPEG._value
+    context[].width = w
+    context[].height = h
+    context[].color_range = color_range
     var packet = avcodec.av_packet_alloc().value()
 
     context[].pix_fmt = get_pix_fmt_from_extension(suffix)
@@ -161,12 +146,12 @@ def image_write(image: Image[c_uchar.dtype], path: Path) raises:
     # FFmpeg must not own this memory — it lives on `Image`.
     var src_frame = avutil.av_frame_alloc().value()
     src_frame[].format = from_fmt
-    src_frame[].width = c_int(image.w)
-    src_frame[].height = c_int(image.h)
+    src_frame[].width = w
+    src_frame[].height = h
     src_frame[].colorspace = AVColorSpace.AVCOL_SPC_RGB._value
     src_frame[].color_range = AVColorRange.AVCOL_RANGE_JPEG._value
-    src_frame[].data[0] = image._data.unsafe_origin_cast[MutExternalOrigin]()
-    src_frame[].linesize[0] = c_int(image.line_size)
+    src_frame[].data[0] = data
+    src_frame[].linesize[0] = line_size
     src_frame[].pts = 0
 
     # Destination: codec-native layout (RGB24 for PNG, YUV420P for MJPEG).
@@ -218,3 +203,43 @@ def image_write(image: Image[c_uchar.dtype], path: Path) raises:
         ctx_ptr[] = context
         avcodec.avcodec_free_context(ctx_ptr)
         ctx_ptr.free()
+
+
+def image_write(image: Image[c_uchar.dtype], path: Path) raises:
+    """Saves an image to a file.
+
+    Args:
+        image: The image to save.
+        path: The path to save the image to.
+    """
+    var from_fmt: AVPixelFormat.ENUM_DTYPE
+    if image.color_space == ColorSpace.RGB_24:
+        from_fmt = AVPixelFormat.AV_PIX_FMT_RGB24._value
+    elif image.color_space == ColorSpace.RGBA_32:
+        from_fmt = AVPixelFormat.AV_PIX_FMT_RGBA._value
+    elif image.color_space == ColorSpace.YUV_420P:
+        from_fmt = AVPixelFormat.AV_PIX_FMT_YUV420P._value
+    elif image.color_space == ColorSpace.GREY_8:
+        from_fmt = AVPixelFormat.AV_PIX_FMT_GRAY8._value
+    else:
+        raise Error("Unsupported color space: ", image.color_space)
+
+    var color_range: c_int
+    if "color_range" in image.io_backend_opaque_params:
+        color_range = image.io_backend_opaque_params["color_range"].bitcast[
+            c_int
+        ]()[]
+    else:
+        print("No color range found, using default")
+        color_range = AVColorRange.AVCOL_RANGE_JPEG._value
+
+    image_write(
+        w=c_int(image.w),
+        h=c_int(image.h),
+        data=image._data.unsafe_origin_cast[MutExternalOrigin](),
+        line_size=c_int(image.line_size),
+        # color_space=image.color_space,
+        from_fmt=from_fmt,
+        color_range=color_range,
+        path=path,
+    )
