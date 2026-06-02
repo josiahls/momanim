@@ -62,7 +62,8 @@ def convert_format(
         Optional[UnsafePointer[c_uchar, ImmutExternalOrigin]]
     ](8)
     for i in range(8):
-        src_slice[i] = src_frame[].data[i].value().as_immutable()
+        if src_frame[].data[i]:
+            src_slice[i] = src_frame[].data[i].value().as_immutable()
     var dst_slice = alloc[Optional[UnsafePointer[c_uchar, MutExternalOrigin]]](
         8
     )
