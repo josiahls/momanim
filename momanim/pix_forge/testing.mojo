@@ -9,11 +9,12 @@ from momanim.pix_forge.surface import *
 comptime logger = Logger()
 
 
+# TODO: Can we make surface parametric? More specifically, SHOULD we?
 @always_inline
 def test_surface_to_png[
     module_name: StaticString,
     test_name: StaticString,
-](surface: Some[Surfaceable]):
+](surface: ColorSurface) raises:
     """
     Save the surface to a PNG file in the `test_data` directory.
 

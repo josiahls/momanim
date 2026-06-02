@@ -1,4 +1,5 @@
 from momanim.stdlib_extensions import Enumable
+from std.sys.info import size_of
 
 
 struct BufferType(Enumable):
@@ -39,8 +40,12 @@ struct BufferType(Enumable):
 
 
 comptime A8 = Scalar[DType.uint8]
-comptime RGBA = SIMD[DType.uint8, 4]
-comptime RGB = SIMD[DType.uint8, 3]
+comptime RGBA_F128 = SIMD[DType.float32, 4]
+comptime RGBA_U32 = SIMD[DType.uint8, 4]
+
+# Default RGBA is a floating point 32 bit per channel
+comptime RGBA = RGBA_F128
+"Default RGBA is a floating point 32 bit per channel pixel ranging 0 -1."
 
 
 trait Surfaceable(Movable, Writable):
@@ -87,7 +92,8 @@ struct ColorSurface(Surfaceable):
     var width: Int
     var height: Int
     var channels: Int
-    var line_size: Int
+    var len_line_bytes: Int
+    var len_bytes: Int
     var size: Int
 
     # TODO: switch to batch_size: SIMDSize
@@ -112,9 +118,17 @@ struct ColorSurface(Surfaceable):
         # Maybe revisit. We may want to have UnsafePointer store Scalar[dtype]
         # so line size makes more sense, however on the other hand, its probably
         # better top operation in RGBA = SIMD[dtype, 4] world?
-        self.line_size = std.math.align_up(self.width, line_alignment)
-        self.size = self.line_size * height
+
+        # Additional confusion, even if the width doesn't itself line up, and
+        # requires alighnment, if the underlying dtype is something like RGB,
+        # 24 bits, its possible the required alignment will be different as
+        # opposed to aligning RGBA.
+        self.size = self.width * height
+        self.len_line_bytes = self.width * size_of[self.format]()
+
+        self.len_bytes = self.len_line_bytes * height
         self.buffer = alloc[Self.format](self.size)
+
         _fill_buffer[batch_size=batch_size](
             self.buffer,
             fill,
