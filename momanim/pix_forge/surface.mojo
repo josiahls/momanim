@@ -1,5 +1,6 @@
 from momanim.stdlib_extensions import Enumable
 from std.sys.info import size_of
+from momanim.pix_forge.color import *
 
 
 struct BufferType(Enumable):
@@ -39,15 +40,6 @@ struct BufferType(Enumable):
         self._value = enum._value
 
 
-comptime A8 = Scalar[DType.uint8]
-comptime RGBA_F128 = SIMD[DType.float32, 4]
-comptime RGBA_U32 = SIMD[DType.uint8, 4]
-
-# Default RGBA is a floating point 32 bit per channel
-comptime RGBA = RGBA_F128
-"Default RGBA is a floating point 32 bit per channel pixel ranging 0 -1."
-
-
 trait Surfaceable(Movable, Writable):
     """An Surface like object."""
 
@@ -59,10 +51,10 @@ trait Surfaceable(Movable, Writable):
 
 
 def _fill_buffer[
-    dtype: DType, width: Int, //, batch_size: Int
+    format: ColorType, //, batch_size: Int
 ](
-    mut buffer: UnsafePointer[SIMD[dtype, width], MutExternalOrigin],
-    fill: SIMD[dtype, width],
+    mut buffer: UnsafePointer[format, MutExternalOrigin],
+    fill: format,
     size: Int,
     msg: StaticString,
 ):
@@ -91,7 +83,6 @@ struct ColorSurface(Surfaceable):
     var buffer: UnsafePointer[Self.format, MutExternalOrigin]
     var width: Int
     var height: Int
-    var channels: Int
     var line_size_bytes: Int
     var len_bytes: Int
     var size: Int
@@ -101,15 +92,29 @@ struct ColorSurface(Surfaceable):
         batch_size: Int = 64
     ](
         out self,
+        fill: RGBA_F,
+        width: Int,
+        height: Int,
+        # line_alignment: Int = 16,
+    ):
+        self = Self.__init__(
+            fill=RGBA_UInt8.cast_from(fill),
+            width=width,
+            height=height,
+        )
+
+    # TODO: switch to batch_size: SIMDSize
+    def __init__[
+        batch_size: Int = 64
+    ](
+        out self,
         fill: Self.format,
         width: Int,
         height: Int,
-        channels: Int = Self.format.size,
-        line_alignment: Int = 16,
+        # line_alignment: Int = 16,
     ):
         self.width = width
         self.height = height
-        self.channels = channels
         # TODO: A little confusing here. The line size is the number of
         # elements in a row. In RGBA's case, this is 4 subelements.
         # Normally the line size is the literal number of bytes e.g.:
@@ -158,7 +163,7 @@ struct MaskSurface(Surfaceable):
         fill: Self.format,
         width: Int,
         height: Int,
-        line_alignment: Int = 16,
+        # line_alignment: Int = 16,
     ):
         self.width = width
         self.height = height
@@ -182,9 +187,12 @@ struct SolidSurface(Surfaceable):
     # TODO: Parameterize later. Also I think newer mojo versions fix the infrerence.
     comptime format = RGBA
 
-    var buffer: InlineArray[Scalar[Self.format.dtype], Self.format.size]
+    var buffer: InlineArray[Self.format, Self.format.size]
+
+    def __init__(out self, rgba: RGBA_F):
+        self = Self.__init__(Self.format.cast_from(rgba))
 
     def __init__(out self, rgba: Self.format):
         # TODO: See if updating mojo allows us to remove this.
         # there really no reason to need to rebind.
-        self.buffer = rebind[type_of(self.buffer)](rgba.as_bytes())
+        self.buffer = rebind[type_of(self.buffer)](rgba)

@@ -4,6 +4,7 @@ from std.logger import Logger
 from std.sys.defines import get_defined_string
 from momanim.pix_forge.output import surface_to_png
 from momanim.pix_forge.surface import *
+from momanim.pix_forge.color import *
 
 
 comptime logger = Logger()
