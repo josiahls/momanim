@@ -9,8 +9,8 @@ x-momanim_base: &momanim_base
   stdin_open: true
   tty: true
   shm_size: 16000000000
-  ports:
-    - "5911:5911"
+  # ports:
+  #   - "5911:5911"
   volumes:
     - .:/home/mojo_user/momanim/
     - ~/.ssh:/home/mojo_user/.ssh:rw
@@ -43,6 +43,16 @@ services:
     image: josiahls/momanim-arm64-cpu:${VERSION:-latest}
     profiles: ["build_cpu_arm64"]
     platform: linux/arm64
+
+  momanim_build_gpu_x86_64_rocm:
+    build:
+      dockerfile: momanim.rocm.Dockerfile
+      context: .
+      # cache_from:
+      # - josiahls/momanim-x86_64-gpu:${VERSION:-latest}
+    image: josiahls/momanim-x86_64-gpu-rocm:${VERSION:-latest}
+    profiles: ["build_gpu_x86_64_rocm"]
+    platform: linux/amd64
 
   momanim_build_gpu_x86_64:
     build:
@@ -106,5 +116,17 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-  
 
+  momanim_gpu_x86_64_rocm: &momanim_gpu_x86_64_rocm
+    <<: *momanim_base
+    profiles: ["gpu_x86_64_rocm"]
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
+    image: josiahls/momanim-x86_64-gpu-rocm:${VERSION:-latest}
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      - video
